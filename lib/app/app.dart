@@ -19,7 +19,7 @@ class PosApp extends StatelessWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: AppRoutes.login,
+      initialRoute: AppRoutes.initial,
       onGenerateRoute: routeGenerator.generateRoute,
     );
   }

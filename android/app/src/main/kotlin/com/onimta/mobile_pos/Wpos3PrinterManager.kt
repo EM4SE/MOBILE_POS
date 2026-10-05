@@ -4,34 +4,35 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.IBinder
+import android.os.Parcel
 import android.util.Log
-import java.io.File
-import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 
 /**
- * Robust Multi-layer Printer Manager for W-POS 3 (Wiseasy / WangPOS) smart POS terminals.
- * Supports:
- * 1. Direct WangPOS SDK instance (`wangpos.sdk4.libbasebinder.Printer`)
- * 2. AIDL CoreService Binder (`wangpos.sdk4.libbasebinder.CoreService`)
- * 3. System-level Wiseasy printer services
- * 4. High-resolution 58mm thermal bitmap and direct ESC/POS command streaming
+ * Intelligent Auto-Discovery Hardware Printer Manager for W-POS 3 (Wiseasy / WangPOS) smart POS terminals.
+ * Features:
+ * 1. Deep package scanning for all installed WangPOS / Wiseasy / W-POS 3 printer services
+ * 2. Dynamic classloader stub resolution from connected service classloaders
+ * 3. Asynchronous service connection with synchronous timeout wait for print jobs
+ * 4. High-resolution 58mm (384-dot) bitmap rendering and native formatted text fallback
  */
 class Wpos3PrinterManager(private val context: Context) {
     private val TAG = "Wpos3PrinterManager"
 
     private var printerInstance: Any? = null
     private var printerServiceBinder: Any? = null
+    private var rawBinder: IBinder? = null
     private var isBound = false
     private var isInitialized = false
 
-    // Reflection method caches
+    // Method caches
     private var printInitMethod: Method? = null
     private var clearCacheMethod: Method? = null
     private var printStringMethod: Method? = null
@@ -40,50 +41,61 @@ class Wpos3PrinterManager(private val context: Context) {
     private var printPaperMethod: Method? = null
     private var printFinishMethod: Method? = null
 
-    private val possibleServiceIntents = listOf(
-        Intent().setComponent(ComponentName("wangpos.sdk4.libbasebinder", "wangpos.sdk4.libbasebinder.CoreService")),
-        Intent("wangpos.sdk4.libbasebinder.CoreService").setPackage("wangpos.sdk4.libbasebinder"),
-        Intent().setComponent(ComponentName("com.wangpos.printerservice", "com.wangpos.printerservice.PrinterService")),
-        Intent("com.wangpos.printerservice.PrinterService").setPackage("com.wangpos.printerservice"),
-        Intent().setComponent(ComponentName("com.wiseasy.printer", "com.wiseasy.printer.PrinterService")),
-        Intent("com.wiseasy.printer.PrinterService").setPackage("com.wiseasy.printer"),
-        Intent("android.intent.action.WANGPOS_PRINTER_SERVICE")
-    )
-
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            Log.d(TAG, "W-POS 3 Service Connected: $name, binder: $service")
-            try {
-                val stubClasses = listOf(
+            Log.d(TAG, "W-POS 3 Service Connected: $name, binder class: ${service?.javaClass?.name}")
+            rawBinder = service
+            isBound = true
+
+            if (service != null) {
+                // 1. Try resolving stub from service's own ClassLoader
+                val serviceClassLoader = service.javaClass.classLoader
+                val stubClassNames = listOf(
                     "wangpos.sdk4.libbasebinder.Core\$Stub",
                     "wangpos.sdk4.libbasebinder.Printer\$Stub",
                     "com.wangpos.printerservice.IPrinterService\$Stub",
-                    "com.wiseasy.printer.IPrinterService\$Stub"
+                    "com.wiseasy.printer.IPrinterService\$Stub",
+                    "com.wiseasy.printer.PrinterService\$Stub",
+                    "com.wiseasy.smartpos.printer.IPrinterService\$Stub",
+                    "com.pos.sdk.printer.IPrinterService\$Stub"
                 )
 
-                for (stubName in stubClasses) {
+                for (stubName in stubClassNames) {
                     try {
-                        val clazz = Class.forName(stubName)
+                        val clazz = try {
+                            serviceClassLoader?.loadClass(stubName) ?: Class.forName(stubName)
+                        } catch (_: Exception) {
+                            Class.forName(stubName)
+                        }
+
                         val asInterface = clazz.getMethod("asInterface", IBinder::class.java)
                         printerServiceBinder = asInterface.invoke(null, service)
                         if (printerServiceBinder != null) {
-                            Log.d(TAG, "W-POS 3 binder interface obtained: $printerServiceBinder")
+                            Log.d(TAG, "Successfully resolved W-POS 3 binder interface via $stubName: $printerServiceBinder")
+                            cacheMethods(printerServiceBinder!!.javaClass)
+                            isInitialized = true
                             break
                         }
                     } catch (_: Exception) {}
                 }
 
-                isBound = true
-                initDirectSdk()
-            } catch (e: Throwable) {
-                Log.e(TAG, "Error in onServiceConnected: ${e.message}", e)
+                // If stub resolution didn't find specific wrapper, use binder directly
+                if (printerServiceBinder == null) {
+                    printerServiceBinder = service
+                    cacheMethods(service.javaClass)
+                    isInitialized = true
+                }
             }
+
+            initDirectSdk()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             Log.d(TAG, "W-POS 3 Service Disconnected: $name")
             printerServiceBinder = null
+            rawBinder = null
             isBound = false
+            isInitialized = false
         }
     }
 
@@ -93,7 +105,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
     fun initSdk() {
         initDirectSdk()
-        bindService()
+        bindDiscoveredServices()
     }
 
     private fun initDirectSdk() {
@@ -117,7 +129,7 @@ class Wpos3PrinterManager(private val context: Context) {
                     context.classLoader.loadClass(className)
                 }
 
-                Log.d(TAG, "Found candidate WPOS class: $className")
+                Log.d(TAG, "Found candidate WPOS class in classpath: $className")
 
                 // Try Constructor(Context)
                 val constructorWithContext = clazz.constructors.firstOrNull {
@@ -128,7 +140,6 @@ class Wpos3PrinterManager(private val context: Context) {
                     printerInstance = constructorWithContext.newInstance(context.applicationContext)
                     Log.d(TAG, "Instantiated $className with application context: $printerInstance")
                 } else {
-                    // Try empty constructor
                     val emptyConstructor = clazz.constructors.firstOrNull { it.parameterTypes.isEmpty() }
                     if (emptyConstructor != null) {
                         printerInstance = emptyConstructor.newInstance()
@@ -142,32 +153,59 @@ class Wpos3PrinterManager(private val context: Context) {
                     break
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Candidate $className not available directly: ${e.message}")
+                Log.w(TAG, "Candidate $className not directly loadable: ${e.message}")
             }
         }
     }
 
-    private fun cacheMethods(clazz: Class<*>) {
-        printInitMethod = clazz.methods.firstOrNull { it.name == "printInit" }
-        clearCacheMethod = clazz.methods.firstOrNull { it.name == "clearPrintDataCache" || it.name == "cleanData" }
-        printStringMethod = clazz.methods.firstOrNull { it.name == "printString" || it.name == "printText" }
-        print2StringMethod = clazz.methods.firstOrNull { it.name == "print2String" || it.name == "printTwoColumn" }
-        printPictureMethod = clazz.methods.firstOrNull { it.name == "printPicture" || it.name == "printBitmap" || it.name == "printImage" }
-        printPaperMethod = clazz.methods.firstOrNull { it.name == "printPaper" || it.name == "feedPaper" || it.name == "lineWrap" }
-        printFinishMethod = clazz.methods.firstOrNull { it.name == "printFinish" || it.name == "printContent" || it.name == "commitPrint" }
-
-        Log.d(TAG, "Cached methods for ${clazz.name}: " +
-                "init=${printInitMethod?.name}, " +
-                "clear=${clearCacheMethod?.name}, " +
-                "printStr=${printStringMethod?.name}, " +
-                "printPic=${printPictureMethod?.name}, " +
-                "feed=${printPaperMethod?.name}, " +
-                "finish=${printFinishMethod?.name}")
-    }
-
-    private fun bindService() {
+    private fun bindDiscoveredServices() {
         if (isBound) return
-        for (intent in possibleServiceIntents) {
+
+        val explicitIntents = mutableListOf(
+            Intent().setComponent(ComponentName("wangpos.sdk4.libbasebinder", "wangpos.sdk4.libbasebinder.CoreService")),
+            Intent("wangpos.sdk4.libbasebinder.CoreService").setPackage("wangpos.sdk4.libbasebinder"),
+            Intent().setComponent(ComponentName("com.wangpos.printerservice", "com.wangpos.printerservice.PrinterService")),
+            Intent("com.wangpos.printerservice.PrinterService").setPackage("com.wangpos.printerservice"),
+            Intent().setComponent(ComponentName("com.wiseasy.printer", "com.wiseasy.printer.PrinterService")),
+            Intent("com.wiseasy.printer.PrinterService").setPackage("com.wiseasy.printer"),
+            Intent("com.wiseasy.printer.service").setPackage("com.wiseasy.printer")
+        )
+
+        // Dynamically discover all installed printer packages and implicit action services
+        try {
+            val pm = context.packageManager
+
+            // Resolve implicit action "android.intent.action.WANGPOS_PRINTER_SERVICE" explicitly
+            val actionIntent = Intent("android.intent.action.WANGPOS_PRINTER_SERVICE")
+            val resolveInfos = pm.queryIntentServices(actionIntent, 0)
+            for (resolveInfo in resolveInfos) {
+                val serviceInfo = resolveInfo.serviceInfo
+                if (serviceInfo != null) {
+                    explicitIntents.add(
+                        Intent().setComponent(ComponentName(serviceInfo.packageName, serviceInfo.name))
+                    )
+                }
+            }
+
+            val installedPackages = pm.getInstalledPackages(PackageManager.GET_SERVICES)
+            for (pkg in installedPackages) {
+                val pkgName = pkg.packageName.lowercase()
+                if (pkgName.contains("wangpos") || pkgName.contains("wiseasy") ||
+                    pkgName.contains("wpos") || (pkgName.contains("printer") && !pkgName.contains("printspooler"))) {
+                    Log.d(TAG, "Discovered POS printer package: ${pkg.packageName}")
+                    pkg.services?.forEach { serviceInfo ->
+                        Log.d(TAG, "  -> Found Service: ${serviceInfo.name}")
+                        explicitIntents.add(
+                            Intent().setComponent(ComponentName(pkg.packageName, serviceInfo.name))
+                        )
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Error scanning installed packages: ${e.message}")
+        }
+
+        for (intent in explicitIntents) {
             try {
                 val bound = context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
                 if (bound) {
@@ -181,11 +219,39 @@ class Wpos3PrinterManager(private val context: Context) {
         }
     }
 
-    fun isPrinterReady(): Boolean {
-        if (!isInitialized && printerInstance == null && printerServiceBinder == null) {
-            initSdk()
+    private fun cacheMethods(clazz: Class<*>) {
+        printInitMethod = clazz.methods.firstOrNull { it.name == "printInit" }
+        clearCacheMethod = clazz.methods.firstOrNull { it.name == "clearPrintDataCache" || it.name == "cleanData" }
+        printStringMethod = clazz.methods.firstOrNull { it.name == "printString" || it.name == "printText" }
+        print2StringMethod = clazz.methods.firstOrNull { it.name == "print2String" || it.name == "printTwoColumn" }
+        printPictureMethod = clazz.methods.firstOrNull { it.name == "printPicture" || it.name == "printBitmap" || it.name == "printImage" }
+        printPaperMethod = clazz.methods.firstOrNull { it.name == "printPaper" || it.name == "feedPaper" || it.name == "lineWrap" }
+        printFinishMethod = clazz.methods.firstOrNull { it.name == "printFinish" || it.name == "printContent" || it.name == "commitPrint" }
+
+        Log.d(TAG, "Cached methods on ${clazz.name}: " +
+                "init=${printInitMethod?.name}, " +
+                "clear=${clearCacheMethod?.name}, " +
+                "printStr=${printStringMethod?.name}, " +
+                "printPic=${printPictureMethod?.name}, " +
+                "feed=${printPaperMethod?.name}, " +
+                "finish=${printFinishMethod?.name}")
+    }
+
+    private fun waitForPrinterReady(timeoutMs: Long = 1800): Boolean {
+        if (printerInstance != null || printerServiceBinder != null) return true
+        initSdk()
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            if (printerInstance != null || printerServiceBinder != null) return true
+            try {
+                Thread.sleep(100)
+            } catch (_: InterruptedException) {}
         }
-        return isInitialized || printerInstance != null || printerServiceBinder != null || isBound
+        return printerInstance != null || printerServiceBinder != null
+    }
+
+    fun isPrinterReady(): Boolean {
+        return printerInstance != null || printerServiceBinder != null || isBound
     }
 
     fun printReceipt(
@@ -194,8 +260,9 @@ class Wpos3PrinterManager(private val context: Context) {
     ) {
         Thread {
             try {
-                if (printerInstance == null && printerServiceBinder == null) {
-                    initSdk()
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
                 }
 
                 val appName = receiptData["appName"] as? String ?: "ONIMTA POS"
@@ -258,7 +325,7 @@ class Wpos3PrinterManager(private val context: Context) {
                         }
                     }
 
-                    // 3. If bitmap print method was not available, execute direct text printing
+                    // 3. Text fallback if bitmap method not supported
                     if (!bitmapSuccess && printStringMethod != null) {
                         fun pLine(text: String, size: Int = 22, align: Int = 0, bold: Boolean = false) {
                             try {
@@ -350,8 +417,7 @@ class Wpos3PrinterManager(private val context: Context) {
                     Log.d(TAG, "W-POS 3 receipt printed successfully")
                     onComplete(true, null)
                 } else {
-                    Log.e(TAG, "W-POS 3 SDK is not bound and printer instance could not be created")
-                    onComplete(false, "W-POS 3 thermal printer service is not connected on this terminal")
+                    onComplete(false, "W-POS 3 printer service is not connected on this terminal")
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "Error printing receipt on W-POS 3: ${e.message}", e)
@@ -366,8 +432,9 @@ class Wpos3PrinterManager(private val context: Context) {
     ) {
         Thread {
             try {
-                if (printerInstance == null && printerServiceBinder == null) {
-                    initSdk()
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
                 }
 
                 val appName = movementData["appName"] as? String ?: "ONIMTA POS"
@@ -396,16 +463,13 @@ class Wpos3PrinterManager(private val context: Context) {
                         dateTime = dateTime
                     )
 
-                    var printed = false
                     if (printPictureMethod != null) {
                         try {
                             val params = printPictureMethod!!.parameterTypes
                             if (params.size == 1 && params[0] == Bitmap::class.java) {
                                 printPictureMethod!!.invoke(target, bitmap)
-                                printed = true
                             } else if (params.size == 2 && params[0] == Bitmap::class.java) {
                                 printPictureMethod!!.invoke(target, bitmap, 1)
-                                printed = true
                             }
                         } catch (_: Throwable) {}
                     }
@@ -432,8 +496,9 @@ class Wpos3PrinterManager(private val context: Context) {
     ) {
         Thread {
             try {
-                if (printerInstance == null && printerServiceBinder == null) {
-                    initSdk()
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
                 }
 
                 val target = printerInstance ?: printerServiceBinder

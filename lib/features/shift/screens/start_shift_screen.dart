@@ -5,6 +5,7 @@ import '../../../core/services/authentication_service.dart';
 import '../../../core/services/shift_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../core/widgets/pos_animated_loader.dart';
 import '../../authentication/widgets/numeric_keypad.dart';
 
 /// Screen displayed after Login if a Day or Shift is not active
@@ -144,128 +145,142 @@ class _StartShiftScreenState extends State<StartShiftScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Section: Info & Opening Balance Display
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Simple Header Card
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        border: Border.all(color: themeColor.withOpacity(0.4), width: 1.5),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            titleText,
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                // Top Section: Info & Opening Balance Display
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Simple Header Card
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border.all(color: themeColor.withOpacity(0.4), width: 1.5),
                           ),
-                          Text(
-                            'User: ${user?.displayName ?? "Admin"}',
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Active Input Display
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        border: Border.all(color: themeColor, width: 2),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Flexible(
-                            child: Text(
-                              'OPENING FLOAT:',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.textSecondary,
-                                letterSpacing: 0.5,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                titleText,
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              _inputBuffer.isEmpty ? 'LKR 0.00' : 'LKR $_inputBuffer',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: themeColor,
+                              Text(
+                                'User: ${user?.displayName ?? "Admin"}',
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
 
-                    const SizedBox(height: 10),
+                        const SizedBox(height: 12),
 
-                    // Quick Presets Row
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: presets.map((preset) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: InkWell(
-                              onTap: () => _applyPreset(preset),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  border: Border.all(color: AppColors.border),
-                                ),
+                        // Active Input Display
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border.all(color: themeColor, width: 2),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Flexible(
                                 child: Text(
-                                  preset == 0 ? 'LKR 0' : 'LKR $preset',
-                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  'OPENING FLOAT:',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textSecondary,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                              const SizedBox(width: 8),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _inputBuffer.isEmpty ? 'LKR 0.00' : 'LKR $_inputBuffer',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: themeColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
-            // Bottom Section: Hardware-friendly Keypad
-            AbsorbPointer(
-              absorbing: _isLoading,
-              child: Opacity(
-                opacity: _isLoading ? 0.6 : 1.0,
-                child: NumericKeypad(
-                  buttonHeight: 56.0,
-                  onDigitPressed: _onDigitPressed,
-                  onBackspace: _onBackspace,
-                  onClear: _onClear,
-                  onSubmit: _handleSubmit,
-                  submitLabel: 'START',
-                  submitIcon: Icons.play_arrow_rounded,
+                        const SizedBox(height: 10),
+
+                        // Quick Presets Row
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: presets.map((preset) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: InkWell(
+                                  onTap: () => _applyPreset(preset),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: Text(
+                                      preset == 0 ? 'LKR 0' : 'LKR $preset',
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Bottom Section: Hardware-friendly Keypad
+                AbsorbPointer(
+                  absorbing: _isLoading,
+                  child: Opacity(
+                    opacity: _isLoading ? 0.6 : 1.0,
+                    child: NumericKeypad(
+                      buttonHeight: 56.0,
+                      onDigitPressed: _onDigitPressed,
+                      onBackspace: _onBackspace,
+                      onClear: _onClear,
+                      onSubmit: _handleSubmit,
+                      submitLabel: 'START',
+                      submitIcon: Icons.play_arrow_rounded,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.65),
+              child: Center(
+                child: PosAnimatedLoader(
+                  title: widget.isDayStart ? 'Starting Day & Shift...' : 'Starting Shift...',
+                  dotColor: themeColor,
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

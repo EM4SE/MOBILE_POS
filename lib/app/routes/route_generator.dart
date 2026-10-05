@@ -24,6 +24,7 @@ import '../../features/settings/controllers/settings_controller.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/shift/screens/end_shift_screen.dart';
 import '../../features/shift/screens/start_shift_screen.dart';
+import '../../features/splash/screens/splash_screen.dart';
 import 'app_routes.dart';
 
 /// Central RouteGenerator dispatching named routes with controller dependencies
@@ -49,6 +50,14 @@ class RouteGenerator {
   Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case AppRoutes.initial:
+        return _buildRoute(
+          SplashScreen(
+            authService: authService,
+            shiftService: shiftService,
+          ),
+          settings,
+        );
+
       case AppRoutes.login:
         return _buildRoute(
           LoginScreen(

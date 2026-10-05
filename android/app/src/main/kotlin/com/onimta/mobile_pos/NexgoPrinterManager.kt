@@ -267,7 +267,15 @@ class NexgoPrinterManager(private val context: Context) {
                         if (resultCode == 0) {
                             onComplete(true, null)
                         } else {
-                            onComplete(false, "Print failed with code: $resultCode")
+                            val errorDescription = when (resultCode) {
+                                -1005 -> "Printer out of paper. Please insert paper roll."
+                                -1006 -> "Printer cover is open. Please close cover."
+                                -1003 -> "Printer is overheating. Please wait."
+                                -1004 -> "Battery low for printer."
+                                -1002 -> "Printer is busy."
+                                else -> "Print failed with code: $resultCode"
+                            }
+                            onComplete(false, errorDescription)
                         }
                     }
                     null
@@ -572,7 +580,15 @@ class NexgoPrinterManager(private val context: Context) {
                         if (resultCode == 0) {
                             onComplete(true, null)
                         } else {
-                            onComplete(false, "Print failed with code: $resultCode")
+                            val errorDescription = when (resultCode) {
+                                -1005 -> "Printer out of paper. Please insert paper roll."
+                                -1006 -> "Printer cover is open. Please close cover."
+                                -1003 -> "Printer is overheating. Please wait."
+                                -1004 -> "Battery low for printer."
+                                -1002 -> "Printer is busy."
+                                else -> "Print failed with code: $resultCode"
+                            }
+                            onComplete(false, errorDescription)
                         }
                     }
                     null
