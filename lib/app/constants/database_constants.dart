@@ -12,11 +12,33 @@ class DatabaseConstants {
   static const String tableSales = 'sales';
   static const String tableSaleItems = 'sale_items';
   static const String tableSettings = 'settings';
+  static const String tableBusinessDays = 'business_days';
+  static const String tableShifts = 'shifts';
 
   // Common Columns
   static const String colId = 'id';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+
+  // Business Days Columns
+  static const String colDayNumber = 'day_number';
+  static const String colOpenedAt = 'opened_at';
+  static const String colClosedAt = 'closed_at';
+  static const String colOpenedBy = 'opened_by';
+  static const String colClosedBy = 'closed_by';
+  static const String colOpeningBalance = 'opening_balance';
+  static const String colClosingBalance = 'closing_balance';
+  static const String colExpectedBalance = 'expected_balance';
+
+  // Shifts Columns
+  static const String colDayId = 'day_id';
+  static const String colShiftNumber = 'shift_number';
+  static const String colCashierUsername = 'cashier_username';
+  static const String colCashSales = 'cash_sales';
+  static const String colTotalSales = 'total_sales';
+  static const String colPaidIn = 'paid_in';
+  static const String colPaidOut = 'paid_out';
+  static const String colCashDifference = 'cash_difference';
 
   // Users Columns
   static const String colUsername = 'username';

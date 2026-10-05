@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/authentication_service.dart';
+import '../../core/services/shift_service.dart';
 import '../../data/models/customer_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/sale_model.dart';
@@ -21,11 +22,14 @@ import '../../features/products/screens/product_form_screen.dart';
 import '../../features/products/screens/products_screen.dart';
 import '../../features/settings/controllers/settings_controller.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../features/shift/screens/end_shift_screen.dart';
+import '../../features/shift/screens/start_shift_screen.dart';
 import 'app_routes.dart';
 
 /// Central RouteGenerator dispatching named routes with controller dependencies
 class RouteGenerator {
   final AuthenticationService authService;
+  final ShiftService shiftService;
   final LoginController loginController;
   final PosController posController;
   final ProductController productController;
@@ -34,6 +38,7 @@ class RouteGenerator {
 
   RouteGenerator({
     required this.authService,
+    required this.shiftService,
     required this.loginController,
     required this.posController,
     required this.productController,
@@ -46,7 +51,30 @@ class RouteGenerator {
       case AppRoutes.initial:
       case AppRoutes.login:
         return _buildRoute(
-          LoginScreen(controller: loginController),
+          LoginScreen(
+            controller: loginController,
+            shiftService: shiftService,
+          ),
+          settings,
+        );
+
+      case AppRoutes.startShift:
+        final isDayStart = (settings.arguments as bool?) ?? true;
+        return _buildRoute(
+          StartShiftScreen(
+            shiftService: shiftService,
+            authService: authService,
+            isDayStart: isDayStart,
+          ),
+          settings,
+        );
+
+      case AppRoutes.endShift:
+        return _buildRoute(
+          EndShiftScreen(
+            shiftService: shiftService,
+            authService: authService,
+          ),
           settings,
         );
 
@@ -101,6 +129,7 @@ class RouteGenerator {
         return _buildRoute(
           CustomersScreen(
             controller: customerController,
+            posController: posController,
             isSelectionMode: isSelectionMode,
             onCustomerSelected: onSelected,
           ),

@@ -413,7 +413,16 @@ class MoreScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).pushNamed(AppRoutes.settings),
                   ),
 
-                  // 10. POS BILLING / BACK
+                  // 10. SHIFT END (Cash Drawer Reconciliation & Day End)
+                  _buildSquareTile(
+                    context: context,
+                    label: 'SHIFT END',
+                    icon: Icons.schedule,
+                    color: const Color(0xFFC026D3), // Magenta / Purple
+                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.endShift),
+                  ),
+
+                  // 11. POS BILLING / BACK
                   _buildSquareTile(
                     context: context,
                     label: 'POS BILLING',

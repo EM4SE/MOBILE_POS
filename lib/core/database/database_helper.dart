@@ -41,6 +41,7 @@ class DatabaseHelper {
           onCreate: DatabaseMigrations.onCreate,
           onUpgrade: DatabaseMigrations.onUpgrade,
           onOpen: (db) async {
+            await DatabaseMigrations.ensureSchemaUpdates(db);
             await DatabaseMigrations.ensureSampleProducts(db);
           },
         ),

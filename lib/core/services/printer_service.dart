@@ -24,6 +24,15 @@ class PrinterService {
     }
   }
 
+  static Future<bool> setSelectedDevice(String device) async {
+    try {
+      final bool success = await _channel.invokeMethod('setSelectedDevice', {'device': device});
+      return success;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<PrinterResult> printReceipt(Sale sale) async {
     try {
       // Decode payments
@@ -55,6 +64,7 @@ class PrinterService {
           'description': item.productDescription,
           'qty': CurrencyFormatter.formatQuantity(item.quantity),
           'price': CurrencyFormatter.formatWithSymbol(item.unitPrice),
+          'discount': item.discount > 0 ? CurrencyFormatter.formatWithSymbol(item.discount) : '',
           'total': CurrencyFormatter.formatWithSymbol(item.lineTotal),
         };
       }).toList();
@@ -102,6 +112,65 @@ class PrinterService {
       };
 
       final bool result = await _channel.invokeMethod('printCashMovement', payload);
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
+
+  static Future<PrinterResult> printShiftEventReceipt({
+    required String title,
+    required int dayNumber,
+    required int shiftNumber,
+    required String cashierName,
+    required bool isEndReport,
+    double openingBalance = 0.0,
+    String? openedAt,
+    String? dateTime,
+    // End report data
+    int totalInvoices = 0,
+    double grossSales = 0.0,
+    double discount = 0.0,
+    double tax = 0.0,
+    double netSales = 0.0,
+    double cashSales = 0.0,
+    double cardSales = 0.0,
+    double otherSales = 0.0,
+    double paidIn = 0.0,
+    double paidOut = 0.0,
+    double expectedCash = 0.0,
+    double actualCash = 0.0,
+    double cashDiff = 0.0,
+  }) async {
+    try {
+      final payload = {
+        'appName': AppConstants.appName,
+        'title': title,
+        'dayNumber': '#$dayNumber',
+        'shiftNumber': '#$shiftNumber',
+        'cashier': cashierName,
+        'isEndReport': isEndReport,
+        'openingBalance': CurrencyFormatter.formatWithSymbol(openingBalance),
+        'openedAt': openedAt ?? '',
+        'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
+        'totalInvoices': '$totalInvoices',
+        'grossSales': CurrencyFormatter.formatWithSymbol(grossSales),
+        'discount': CurrencyFormatter.formatWithSymbol(discount),
+        'tax': CurrencyFormatter.formatWithSymbol(tax),
+        'netSales': CurrencyFormatter.formatWithSymbol(netSales),
+        'cashSales': CurrencyFormatter.formatWithSymbol(cashSales),
+        'cardSales': CurrencyFormatter.formatWithSymbol(cardSales),
+        'otherSales': CurrencyFormatter.formatWithSymbol(otherSales),
+        'paidIn': CurrencyFormatter.formatWithSymbol(paidIn),
+        'paidOut': CurrencyFormatter.formatWithSymbol(paidOut),
+        'expectedCash': CurrencyFormatter.formatWithSymbol(expectedCash),
+        'actualCash': CurrencyFormatter.formatWithSymbol(actualCash),
+        'cashDiff': (cashDiff > 0 ? '+' : '') + CurrencyFormatter.formatWithSymbol(cashDiff),
+      };
+
+      final bool result = await _channel.invokeMethod('printShiftReport', payload);
       return PrinterResult(result);
     } on PlatformException catch (e) {
       return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');

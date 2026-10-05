@@ -10,6 +10,7 @@ class SaleItem {
   final double quantity;
   final double unitPrice;
   final double unitCost;
+  final double discount;
   final double lineTotal;
 
   const SaleItem({
@@ -21,6 +22,7 @@ class SaleItem {
     required this.quantity,
     required this.unitPrice,
     this.unitCost = 0.0,
+    this.discount = 0.0,
     required this.lineTotal,
   });
 
@@ -33,6 +35,7 @@ class SaleItem {
     double? quantity,
     double? unitPrice,
     double? unitCost,
+    double? discount,
     double? lineTotal,
   }) {
     return SaleItem(
@@ -44,6 +47,7 @@ class SaleItem {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       unitCost: unitCost ?? this.unitCost,
+      discount: discount ?? this.discount,
       lineTotal: lineTotal ?? this.lineTotal,
     );
   }
@@ -57,6 +61,7 @@ class SaleItem {
       DatabaseConstants.colQuantity: quantity,
       DatabaseConstants.colUnitPrice: unitPrice,
       DatabaseConstants.colUnitCost: unitCost,
+      'discount': discount,
       DatabaseConstants.colLineTotal: lineTotal,
     };
     if (id != null) {
@@ -75,6 +80,7 @@ class SaleItem {
       quantity: ((map[DatabaseConstants.colQuantity] as num?) ?? 1.0).toDouble(),
       unitPrice: ((map[DatabaseConstants.colUnitPrice] as num?) ?? 0.0).toDouble(),
       unitCost: ((map[DatabaseConstants.colUnitCost] as num?) ?? 0.0).toDouble(),
+      discount: ((map['discount'] as num?) ?? 0.0).toDouble(),
       lineTotal: ((map[DatabaseConstants.colLineTotal] as num?) ?? 0.0).toDouble(),
     );
   }

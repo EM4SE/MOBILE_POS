@@ -12,6 +12,7 @@ class CartItemRow extends StatelessWidget {
   final bool isEven;
   final void Function(double newQty) onQuantityChanged;
   final void Function(double newPrice) onPriceChanged;
+  final void Function(double newDiscount) onDiscountChanged;
   final VoidCallback onDelete;
   final VoidCallback onSelect;
 
@@ -23,6 +24,7 @@ class CartItemRow extends StatelessWidget {
     required this.isEven,
     required this.onQuantityChanged,
     required this.onPriceChanged,
+    required this.onDiscountChanged,
     required this.onDelete,
     required this.onSelect,
   });
@@ -135,7 +137,7 @@ class CartItemRow extends StatelessWidget {
                     ),
                   ),
 
-                  // Full-width numeric keypad (same as lock screen)
+                  // Full-width numeric keypad
                   NumericKeypad(
                     buttonHeight: 58.0,
                     onDigitPressed: (digit) {
@@ -169,6 +171,295 @@ class CartItemRow extends StatelessWidget {
                       }
                       Navigator.of(ctx).pop();
                     },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Opens Item Discount Keypad Bottom Sheet with % and Amount modes
+  void _showItemDiscountKeypad(BuildContext context) {
+    bool isPct = true;
+    String inputBuf = '';
+    final gross = item.quantity * item.unitPrice;
+
+    if (item.discount > 0 && gross > 0) {
+      final pct = (item.discount / gross) * 100.0;
+      if (pct == pct.roundToDouble()) {
+        isPct = true;
+        inputBuf = pct.toInt().toString();
+      } else {
+        isPct = false;
+        inputBuf = item.discount.toStringAsFixed(0);
+      }
+    }
+
+    final pctPresets = [5, 10, 15, 20, 25, 50];
+    final amtPresets = [10, 20, 50, 100, 200, 500];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final enteredVal = double.tryParse(inputBuf) ?? 0.0;
+            final calculatedDisc = isPct
+                ? (gross * (enteredVal.clamp(0.0, 100.0) / 100.0)).clamp(0.0, gross)
+                : enteredVal.clamp(0.0, gross);
+            final netTotal = (gross - calculatedDisc).clamp(0.0, double.infinity);
+
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    color: const Color(0xFF7C3AED),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Item Discount: ${item.productDescription}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => Navigator.of(ctx).pop(),
+                          child: const Icon(Icons.close, color: Colors.white70, size: 20),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Calculations Row
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    color: AppColors.background,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('BASE TOTAL', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(CurrencyFormatter.formatWithSymbol(gross), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Text('DISCOUNT', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.warning)),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.center,
+                                child: Text('-${CurrencyFormatter.formatWithSymbol(calculatedDisc)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.warning)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text('NET TOTAL', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.success)),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(CurrencyFormatter.formatWithSymbol(netTotal), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.success)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Mode Toggle
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    color: AppColors.surface,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setSheetState(() {
+                                isPct = true;
+                                inputBuf = '';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isPct ? const Color(0xFF7C3AED) : AppColors.surfaceSecondary,
+                                border: Border.all(color: isPct ? const Color(0xFF7C3AED) : AppColors.border),
+                              ),
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'PERCENTAGE (%)',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isPct ? Colors.white : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setSheetState(() {
+                                isPct = false;
+                                inputBuf = '';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: !isPct ? const Color(0xFF7C3AED) : AppColors.surfaceSecondary,
+                                border: Border.all(color: !isPct ? const Color(0xFF7C3AED) : AppColors.border),
+                              ),
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'AMOUNT (LKR)',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: !isPct ? Colors.white : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Input Display
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    color: AppColors.surfaceSecondary,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            isPct ? 'ENTER PERCENTAGE:' : 'ENTER AMOUNT:',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            isPct
+                                ? (inputBuf.isEmpty ? '0 %' : '$inputBuf %')
+                                : (inputBuf.isEmpty ? 'LKR 0.00' : 'LKR $inputBuf'),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF7C3AED)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Presets
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    color: AppColors.surface,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: (isPct ? pctPresets : amtPresets).map((preset) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: InkWell(
+                              onTap: () {
+                                setSheetState(() {
+                                  inputBuf = preset.toString();
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceSecondary,
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                                child: Text(
+                                  isPct ? '$preset%' : 'LKR $preset',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                  // Numeric Keypad
+                  NumericKeypad(
+                    buttonHeight: 52.0,
+                    onDigitPressed: (digit) {
+                      setSheetState(() {
+                        if (inputBuf.length < 6) {
+                          inputBuf += digit;
+                        }
+                      });
+                    },
+                    onBackspace: () {
+                      setSheetState(() {
+                        if (inputBuf.isNotEmpty) {
+                          inputBuf = inputBuf.substring(0, inputBuf.length - 1);
+                        }
+                      });
+                    },
+                    onClear: () {
+                      setSheetState(() {
+                        inputBuf = '';
+                      });
+                    },
+                    onSubmit: () {
+                      onDiscountChanged(calculatedDisc);
+                      Navigator.of(ctx).pop();
+                    },
+                    submitLabel: 'APPLY',
+                    submitIcon: Icons.check,
                   ),
                 ],
               ),
@@ -225,13 +516,16 @@ class CartItemRow extends StatelessWidget {
             ListTile(
               dense: true,
               visualDensity: VisualDensity.compact,
-              leading: const Icon(Icons.discount_outlined, color: AppColors.warning, size: 20),
-              title: const Text('Add Item Discount', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              subtitle: const Text('Reduce line item price', style: TextStyle(fontSize: 11)),
+              leading: const Icon(Icons.discount_outlined, color: Color(0xFF7C3AED), size: 20),
+              title: const Text('Item Discount (% / LKR)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              subtitle: Text(
+                item.discount > 0 ? 'Current: -${CurrencyFormatter.formatWithSymbol(item.discount)}' : 'Set percentage or amount',
+                style: TextStyle(fontSize: 11, color: item.discount > 0 ? AppColors.warning : AppColors.textSecondary),
+              ),
               trailing: const Icon(Icons.chevron_right, size: 16),
               onTap: () {
                 Navigator.of(ctx).pop();
-                _showItemDiscountDialog(context);
+                _showItemDiscountKeypad(context);
               },
             ),
 
@@ -264,61 +558,6 @@ class CartItemRow extends StatelessWidget {
     );
   }
 
-  /// Dialog to enter line item discount
-  void _showItemDiscountDialog(BuildContext context) {
-    final discCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Discount: ${item.productDescription}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Current Total: ${CurrencyFormatter.formatWithSymbol(item.lineTotal)}',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: discCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(
-                labelText: 'Discount Amount (Rs.)',
-                hintText: '0.00',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
-            onPressed: () {
-              final disc = CurrencyFormatter.parseDouble(discCtrl.text);
-              if (disc > 0) {
-                final total = item.quantity * item.unitPrice;
-                final newTotal = (total - disc).clamp(0.0, double.infinity);
-                final newUnitPrice = item.quantity > 0 ? (newTotal / item.quantity) : item.unitPrice;
-                onPriceChanged(newUnitPrice);
-              }
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Apply Discount', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bgColor = isSelected
@@ -326,7 +565,8 @@ class CartItemRow extends StatelessWidget {
         : (isEven ? AppColors.tableRowEven : AppColors.tableRowOdd);
 
     return Container(
-      height: 44, // Compact row height for small POS screens
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
         color: bgColor,
         border: const Border(
@@ -334,6 +574,7 @@ class CartItemRow extends StatelessWidget {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Row number (#)
           Container(
@@ -349,36 +590,61 @@ class CartItemRow extends StatelessWidget {
             ),
           ),
 
-          // Description Column (Clickable -> Opens Action / Remove Popup)
+          // Description Column (Clickable -> Opens Action / Remove / Item Discount Popup)
           Expanded(
             flex: 4,
             child: InkWell(
               onTap: () => _showItemActionDialog(context),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       item.productDescription,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (item.productCode.isNotEmpty) ...[
-                      Text(
-                        'Code: ${item.productCode}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                    Row(
+                      children: [
+                        if (item.productCode.isNotEmpty)
+                          Flexible(
+                            child: Text(
+                              'Code: ${item.productCode}',
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                color: AppColors.textSecondary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        if (item.discount > 0) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+                            decoration: BoxDecoration(
+                              color: AppColors.warning.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                            child: Text(
+                              '-${CurrencyFormatter.formatWithSymbol(item.discount)}',
+                              style: const TextStyle(
+                                fontSize: 9.0,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -393,18 +659,21 @@ class CartItemRow extends StatelessWidget {
                 onTap: () => _showQuantityKeypad(context),
                 borderRadius: BorderRadius.circular(3),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
                     color: AppColors.primaryLight,
                     border: Border.all(color: AppColors.primary.withAlpha(80)),
                     borderRadius: BorderRadius.circular(3),
                   ),
-                  child: Text(
-                    CurrencyFormatter.formatQuantity(item.quantity),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryDark,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      CurrencyFormatter.formatQuantity(item.quantity),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDark,
+                      ),
                     ),
                   ),
                 ),
@@ -417,30 +686,58 @@ class CartItemRow extends StatelessWidget {
             flex: 2,
             child: Container(
               alignment: Alignment.centerRight,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text(
-                CurrencyFormatter.formatAmount(item.unitPrice),
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  CurrencyFormatter.formatAmount(item.unitPrice),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ),
           ),
 
-          // Total Column
+          // Total Column (Shows net total and strikethrough if discounted)
           Expanded(
             flex: 3,
             child: Container(
               alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 8, left: 4),
-              child: Text(
-                CurrencyFormatter.formatAmount(item.lineTotal),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
+              padding: const EdgeInsets.only(right: 6, left: 2),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      CurrencyFormatter.formatAmount(item.lineTotal),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (item.discount > 0)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        CurrencyFormatter.formatAmount(item.quantity * item.unitPrice),
+                        style: const TextStyle(
+                          fontSize: 9.0,
+                          decoration: TextDecoration.lineThrough,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),

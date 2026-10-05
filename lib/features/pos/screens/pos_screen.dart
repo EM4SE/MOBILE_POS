@@ -185,6 +185,7 @@ class _PosScreenState extends State<PosScreen> {
                     selectedIndex: widget.controller.editingIndex,
                     onQuantityChanged: (index, newQty) => widget.controller.updateQuantity(index, newQty),
                     onPriceChanged: (index, newPrice) => widget.controller.updatePrice(index, newPrice),
+                    onDiscountChanged: (index, newDiscount) => widget.controller.updateItemDiscount(index, newDiscount),
                     onDeleteItem: (index) => widget.controller.removeItem(index),
                     onSelectItem: (index) => widget.controller.setEditingIndex(index),
                     onAddProduct: _openProductSelector,

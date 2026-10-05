@@ -10,12 +10,15 @@ import 'data/datasources/local/customer_local_datasource.dart';
 import 'data/datasources/local/product_local_datasource.dart';
 import 'data/datasources/local/sales_local_datasource.dart';
 import 'data/datasources/local/settings_local_datasource.dart';
+import 'data/datasources/local/shift_local_datasource.dart';
 import 'data/datasources/local/user_local_datasource.dart';
 import 'data/repositories/customer_repository.dart';
 import 'data/repositories/product_repository.dart';
 import 'data/repositories/sales_repository.dart';
 import 'data/repositories/settings_repository.dart';
+import 'data/repositories/shift_repository.dart';
 import 'data/repositories/user_repository.dart';
+import 'core/services/shift_service.dart';
 import 'features/authentication/controllers/login_controller.dart';
 import 'features/customers/controllers/customer_controller.dart';
 import 'features/pos/controllers/pos_controller.dart';
@@ -47,6 +50,7 @@ void main() async {
   final CustomerLocalDataSource customerLocalDataSource = CustomerLocalDataSourceImpl(databaseService);
   final SalesLocalDataSource salesLocalDataSource = SalesLocalDataSourceImpl(databaseService);
   final SettingsLocalDataSource settingsLocalDataSource = SettingsLocalDataSourceImpl(databaseService);
+  final ShiftLocalDatasource shiftLocalDatasource = ShiftLocalDatasource(DatabaseHelper.instance);
 
   // 3. Repository Layer
   final UserRepository userRepository = UserRepositoryImpl(userLocalDataSource);
@@ -54,9 +58,11 @@ void main() async {
   final CustomerRepository customerRepository = CustomerRepositoryImpl(customerLocalDataSource);
   final SalesRepository salesRepository = SalesRepositoryImpl(salesLocalDataSource);
   final SettingsRepository settingsRepository = SettingsRepositoryImpl(settingsLocalDataSource);
+  final ShiftRepository shiftRepository = ShiftRepositoryImpl(shiftLocalDatasource);
 
-  // 4. Core Authentication Service
+  // 4. Core Authentication & Shift Services
   final AuthenticationService authService = AuthenticationServiceImpl(userRepository);
+  final ShiftService shiftService = ShiftServiceImpl(shiftRepository);
 
   // 5. Feature Controllers
   final LoginController loginController = LoginController(authService);
@@ -74,6 +80,7 @@ void main() async {
   // 6. Central Route Generator
   final RouteGenerator routeGenerator = RouteGenerator(
     authService: authService,
+    shiftService: shiftService,
     loginController: loginController,
     posController: posController,
     productController: productController,

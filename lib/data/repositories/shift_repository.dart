@@ -1,0 +1,88 @@
+import '../datasources/local/shift_local_datasource.dart';
+import '../models/business_day_model.dart';
+import '../models/shift_model.dart';
+
+abstract class ShiftRepository {
+  Future<BusinessDay?> getActiveDay();
+  Future<Shift?> getActiveShift();
+  Future<({BusinessDay day, Shift shift})> startDayAndShift({
+    required double openingBalance,
+    required String cashierUsername,
+    required String cashierName,
+  });
+  Future<Shift> startShift({
+    required BusinessDay day,
+    required double openingBalance,
+    required String cashierUsername,
+    required String cashierName,
+  });
+  Future<ShiftSummaryStats> getShiftStats(Shift shift);
+  Future<Shift> closeShift({
+    required Shift shift,
+    required double actualClosingCash,
+  });
+  Future<BusinessDay> closeDay({
+    required BusinessDay day,
+    required double actualClosingCash,
+    required String cashierName,
+  });
+}
+
+class ShiftRepositoryImpl implements ShiftRepository {
+  final ShiftLocalDatasource _datasource;
+
+  ShiftRepositoryImpl(this._datasource);
+
+  @override
+  Future<BusinessDay?> getActiveDay() => _datasource.getActiveDay();
+
+  @override
+  Future<Shift?> getActiveShift() => _datasource.getActiveShift();
+
+  @override
+  Future<({BusinessDay day, Shift shift})> startDayAndShift({
+    required double openingBalance,
+    required String cashierUsername,
+    required String cashierName,
+  }) => _datasource.startDayAndShift(
+    openingBalance: openingBalance,
+    cashierUsername: cashierUsername,
+    cashierName: cashierName,
+  );
+
+  @override
+  Future<Shift> startShift({
+    required BusinessDay day,
+    required double openingBalance,
+    required String cashierUsername,
+    required String cashierName,
+  }) => _datasource.startShift(
+    day: day,
+    openingBalance: openingBalance,
+    cashierUsername: cashierUsername,
+    cashierName: cashierName,
+  );
+
+  @override
+  Future<ShiftSummaryStats> getShiftStats(Shift shift) => _datasource.getShiftStats(shift);
+
+  @override
+  Future<Shift> closeShift({
+    required Shift shift,
+    required double actualClosingCash,
+  }) => _datasource.closeShift(
+    shift: shift,
+    actualClosingCash: actualClosingCash,
+  );
+
+  @override
+  Future<BusinessDay> closeDay({
+    required BusinessDay day,
+    required double actualClosingCash,
+    required String cashierName,
+  }) => _datasource.closeDay(
+    day: day,
+    actualClosingCash: actualClosingCash,
+    cashierName: cashierName,
+  );
+}

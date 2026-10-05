@@ -4,6 +4,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/services/shift_service.dart';
 import '../../../core/utils/responsive_helper.dart';
 import '../controllers/login_controller.dart';
 import '../widgets/numeric_keypad.dart';
@@ -11,16 +12,30 @@ import '../widgets/numeric_keypad.dart';
 /// Touch-friendly POS Login screen with pure numeric keypad and zero soft-keyboard popup
 class LoginScreen extends StatelessWidget {
   final LoginController controller;
+  final ShiftService shiftService;
 
   const LoginScreen({
     super.key,
     required this.controller,
+    required this.shiftService,
   });
 
   Future<void> _handleLogin(BuildContext context) async {
     final user = await controller.login();
     if (user != null && context.mounted) {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.pos);
+      await shiftService.checkActiveSession();
+      if (!context.mounted) return;
+
+      if (!shiftService.hasActiveDay) {
+        // No active Day -> Route to Start Day & Shift
+        Navigator.of(context).pushReplacementNamed(AppRoutes.startShift, arguments: true);
+      } else if (!shiftService.hasActiveShift) {
+        // Active Day exists, but no active Shift -> Route to Start Shift
+        Navigator.of(context).pushReplacementNamed(AppRoutes.startShift, arguments: false);
+      } else {
+        // Both active -> Route directly to POS
+        Navigator.of(context).pushReplacementNamed(AppRoutes.pos);
+      }
     }
   }
 

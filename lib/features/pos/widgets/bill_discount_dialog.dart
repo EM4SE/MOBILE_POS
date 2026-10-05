@@ -33,19 +33,13 @@ class _BillDiscountDialogState extends State<BillDiscountDialog> {
   @override
   void initState() {
     super.initState();
-    // If there's an existing discount, initialize with current amount
-    if (widget.posController.discountAmount > 0) {
-      final subtotal = widget.posController.subtotal;
-      if (subtotal > 0) {
-        final existingPct = (widget.posController.discountAmount / subtotal) * 100.0;
-        if (existingPct == existingPct.roundToDouble()) {
-          _isPercentage = true;
-          _inputBuffer = existingPct.toInt().toString();
-        } else {
-          _isPercentage = false;
-          _inputBuffer = widget.posController.discountAmount.toStringAsFixed(0);
-        }
-      }
+    if (widget.posController.isDiscountPercentage && widget.posController.discountPercentage != null) {
+      _isPercentage = true;
+      final pct = widget.posController.discountPercentage!;
+      _inputBuffer = (pct == pct.roundToDouble()) ? pct.toInt().toString() : pct.toString();
+    } else if (widget.posController.discountAmount > 0) {
+      _isPercentage = false;
+      _inputBuffer = widget.posController.discountAmount.toStringAsFixed(0);
     }
   }
 
@@ -107,7 +101,11 @@ class _BillDiscountDialogState extends State<BillDiscountDialog> {
 
   void _onApply() {
     FeedbackHelper.playScanFeedback();
-    widget.posController.setDiscount(_calculatedDiscountAmount);
+    widget.posController.setDiscount(
+      _calculatedDiscountAmount,
+      isPercentage: _isPercentage,
+      percentage: _isPercentage ? _enteredValue : null,
+    );
     Navigator.of(context).pop();
   }
 

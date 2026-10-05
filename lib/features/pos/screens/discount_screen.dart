@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
@@ -25,19 +26,13 @@ class _DiscountScreenState extends State<DiscountScreen> {
   @override
   void initState() {
     super.initState();
-    // Preload existing discount
-    final currentDiscount = widget.posController.discountAmount;
-    final subtotal = widget.posController.subtotal;
-
-    if (currentDiscount > 0 && subtotal > 0) {
-      final existingPct = (currentDiscount / subtotal) * 100.0;
-      if (existingPct == existingPct.roundToDouble()) {
-        _isPercentage = true;
-        _inputBuffer = existingPct.toInt().toString();
-      } else {
-        _isPercentage = false;
-        _inputBuffer = currentDiscount.toStringAsFixed(0);
-      }
+    if (widget.posController.isDiscountPercentage && widget.posController.discountPercentage != null) {
+      _isPercentage = true;
+      final pct = widget.posController.discountPercentage!;
+      _inputBuffer = (pct == pct.roundToDouble()) ? pct.toInt().toString() : pct.toString();
+    } else if (widget.posController.discountAmount > 0) {
+      _isPercentage = false;
+      _inputBuffer = widget.posController.discountAmount.toStringAsFixed(0);
     }
   }
 
@@ -99,8 +94,12 @@ class _DiscountScreenState extends State<DiscountScreen> {
 
   void _onApply() {
     FeedbackHelper.playScanFeedback();
-    widget.posController.setDiscount(_calculatedDiscountAmount);
-    Navigator.of(context).pop();
+    widget.posController.setDiscount(
+      _calculatedDiscountAmount,
+      isPercentage: _isPercentage,
+      percentage: _isPercentage ? _enteredValue : null,
+    );
+    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.pos, (route) => false);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -118,7 +117,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
   void _onRemoveDiscount() {
     FeedbackHelper.vibrate();
     widget.posController.setDiscount(0.0);
-    Navigator.of(context).pop();
+    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.pos, (route) => false);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -142,8 +141,8 @@ class _DiscountScreenState extends State<DiscountScreen> {
         backgroundColor: themeColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.pos, (route) => false),
+          tooltip: 'Back to POS',
         ),
         actions: [
           if (widget.posController.discountAmount > 0)
@@ -168,43 +167,62 @@ class _DiscountScreenState extends State<DiscountScreen> {
                   children: [
                     // Subtotal vs Discount vs New Total Card
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         border: Border.all(color: themeColor.withOpacity(0.5), width: 1.5),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('BILL SUBTOTAL', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                              const SizedBox(height: 2),
-                              Text(CurrencyFormatter.formatWithSymbol(_subtotal), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('SUBTOTAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(CurrencyFormatter.formatWithSymbol(_subtotal), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
+                                ),
+                              ],
+                            ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const Text('DISCOUNT', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.warning)),
-                              const SizedBox(height: 2),
-                              Text('-${CurrencyFormatter.formatWithSymbol(_calculatedDiscountAmount)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.warning)),
-                            ],
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Text('DISCOUNT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.warning)),
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.center,
+                                  child: Text('-${CurrencyFormatter.formatWithSymbol(_calculatedDiscountAmount)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.warning)),
+                                ),
+                              ],
+                            ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              const Text('NEW TOTAL', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.success)),
-                              const SizedBox(height: 2),
-                              Text(CurrencyFormatter.formatWithSymbol(_calculatedGrandTotal), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.success)),
-                            ],
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text('NEW TOTAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.success)),
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: Text(CurrencyFormatter.formatWithSymbol(_calculatedGrandTotal), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.success)),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
                     // Mode Selector Buttons
                     Row(
@@ -220,7 +238,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
                               decoration: BoxDecoration(
                                 color: _isPercentage ? themeColor : AppColors.surface,
                                 border: Border.all(color: _isPercentage ? themeColor : AppColors.border, width: 1.5),
@@ -228,14 +246,19 @@ class _DiscountScreenState extends State<DiscountScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.percent, size: 18, color: _isPercentage ? Colors.white : AppColors.textSecondary),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'PERCENTAGE (%)',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12.5,
-                                      color: _isPercentage ? Colors.white : AppColors.textPrimary,
+                                  Icon(Icons.percent, size: 16, color: _isPercentage ? Colors.white : AppColors.textSecondary),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'PERCENTAGE (%)',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11.5,
+                                          color: _isPercentage ? Colors.white : AppColors.textPrimary,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -243,7 +266,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: InkWell(
                             onTap: () {
@@ -255,7 +278,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
                               decoration: BoxDecoration(
                                 color: !_isPercentage ? themeColor : AppColors.surface,
                                 border: Border.all(color: !_isPercentage ? themeColor : AppColors.border, width: 1.5),
@@ -263,14 +286,19 @@ class _DiscountScreenState extends State<DiscountScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.payments_outlined, size: 18, color: !_isPercentage ? Colors.white : AppColors.textSecondary),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'FIXED AMOUNT (LKR)',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12.5,
-                                      color: !_isPercentage ? Colors.white : AppColors.textPrimary,
+                                  Icon(Icons.payments_outlined, size: 16, color: !_isPercentage ? Colors.white : AppColors.textSecondary),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'AMOUNT (LKR)',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11.5,
+                                          color: !_isPercentage ? Colors.white : AppColors.textPrimary,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -285,7 +313,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
 
                     // Active Input Display
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         border: Border.all(color: themeColor, width: 2),
@@ -293,18 +321,25 @@ class _DiscountScreenState extends State<DiscountScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            _isPercentage ? 'ENTER PERCENTAGE:' : 'ENTER AMOUNT:',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.textSecondary, letterSpacing: 0.5),
+                          Flexible(
+                            child: Text(
+                              _isPercentage ? 'ENTER PERCENTAGE:' : 'ENTER AMOUNT:',
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: AppColors.textSecondary, letterSpacing: 0.5),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          Text(
-                            _isPercentage
-                                ? (_inputBuffer.isEmpty ? '0 %' : '$_inputBuffer %')
-                                : (_inputBuffer.isEmpty ? 'LKR 0.00' : 'LKR $_inputBuffer'),
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: _inputBuffer.isNotEmpty ? themeColor : Colors.white38,
+                          const SizedBox(width: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              _isPercentage
+                                  ? (_inputBuffer.isEmpty ? '0 %' : '$_inputBuffer %')
+                                  : (_inputBuffer.isEmpty ? 'LKR 0.00' : 'LKR $_inputBuffer'),
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: _inputBuffer.isNotEmpty ? themeColor : Colors.white38,
+                              ),
                             ),
                           ),
                         ],
@@ -350,7 +385,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
               onBackspace: _onBackspace,
               onClear: _onClear,
               onSubmit: _onApply,
-              submitLabel: 'APPLY DISCOUNT',
+              submitLabel: 'APPLY',
               submitIcon: Icons.check_circle_outline,
             ),
           ],

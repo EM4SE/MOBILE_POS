@@ -197,10 +197,14 @@ class NexgoPrinterManager(private val context: Context) {
                 val desc = item["description"] as? String ?: ""
                 val qty = item["qty"] as? String ?: "1"
                 val price = item["price"] as? String ?: ""
+                val itemDisc = item["discount"] as? String ?: ""
                 val total = item["total"] as? String ?: ""
 
                 printLine(desc, 22, alignLeft, true)
                 printTwoCols("  $qty x $price", total, 20, false)
+                if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00") {
+                    printTwoCols("    Item Disc:", "-$itemDisc", 18, false)
+                }
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
@@ -401,6 +405,188 @@ class NexgoPrinterManager(private val context: Context) {
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Error during printCashMovement: ${e.message}", e)
+            onComplete(false, e.message ?: "Unknown printer error")
+        }
+    }
+
+    fun printShiftReport(
+        reportData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        if (!isPrinterReady()) {
+            onComplete(false, "NEXGO thermal printer not initialized or device engine unavailable")
+            return
+        }
+
+        try {
+            val p = printer ?: return onComplete(false, "Printer instance null")
+            val pClass = p.javaClass
+
+            // 1. Reset / Init Printer
+            pClass.getMethod("initPrinter").invoke(p)
+            try {
+                pClass.getMethod("setLetterSpacing", Int::class.javaPrimitiveType).invoke(p, 0)
+            } catch (_: Exception) {}
+
+            val alignLeft = getAlignEnum("LEFT")
+            val alignCenter = getAlignEnum("CENTER")
+
+            val appendTextMethod = pClass.getMethod(
+                "appendPrnStr",
+                String::class.java,
+                Int::class.javaPrimitiveType,
+                alignEnumClass,
+                Boolean::class.javaPrimitiveType
+            )
+
+            val appendTwoColsMethod = try {
+                pClass.getMethod(
+                    "appendPrnStr",
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Boolean::class.javaPrimitiveType
+                )
+            } catch (_: Exception) {
+                null
+            }
+
+            fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
+            }
+
+            fun printTwoCols(left: String, right: String, size: Int = 22, bold: Boolean = false) {
+                if (appendTwoColsMethod != null) {
+                    appendTwoColsMethod.invoke(p, left, right, size, bold)
+                } else {
+                    val totalWidth = 32
+                    val pad = (totalWidth - left.length - right.length).coerceAtLeast(1)
+                    val line = left + " ".repeat(pad) + right
+                    printLine(line, size, alignLeft, bold)
+                }
+            }
+
+            val appName = reportData["appName"] as? String ?: "ONIMTA POS"
+            val title = reportData["title"] as? String ?: "SHIFT REPORT"
+            val dayNumber = reportData["dayNumber"] as? String ?: "1"
+            val shiftNumber = reportData["shiftNumber"] as? String ?: "1"
+            val cashier = reportData["cashier"] as? String ?: "Admin"
+            val dateTime = reportData["dateTime"] as? String ?: ""
+            val openedAt = reportData["openedAt"] as? String ?: ""
+            val isEndReport = reportData["isEndReport"] as? Boolean ?: false
+
+            printLine(appName, 28, alignCenter, true)
+            printLine(title, 22, alignCenter, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printTwoCols("Day #:", dayNumber, 20, false)
+            printTwoCols("Shift #:", shiftNumber, 20, false)
+            printTwoCols("Cashier:", cashier, 20, false)
+            if (dateTime.isNotEmpty()) {
+                printTwoCols("Date / Time:", dateTime, 20, false)
+            }
+            if (openedAt.isNotEmpty()) {
+                printTwoCols("Opened At:", openedAt, 20, false)
+            }
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            if (!isEndReport) {
+                // START SHIFT / DAY REPORT
+                val openingBalance = reportData["openingBalance"] as? String ?: "LKR 0.00"
+                printTwoCols("OPENING FLOAT:", openingBalance, 24, true)
+            } else {
+                // END SHIFT / DAY REPORT
+                val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
+                val grossSales = reportData["grossSales"] as? String ?: "LKR 0.00"
+                val discount = reportData["discount"] as? String ?: "LKR 0.00"
+                val tax = reportData["tax"] as? String ?: "LKR 0.00"
+                val netSales = reportData["netSales"] as? String ?: "LKR 0.00"
+
+                val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+                val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
+                val otherSales = reportData["otherSales"] as? String ?: "LKR 0.00"
+
+                val openingBalance = reportData["openingBalance"] as? String ?: "LKR 0.00"
+                val paidIn = reportData["paidIn"] as? String ?: "LKR 0.00"
+                val paidOut = reportData["paidOut"] as? String ?: "LKR 0.00"
+                val expectedCash = reportData["expectedCash"] as? String ?: "LKR 0.00"
+                val actualCash = reportData["actualCash"] as? String ?: "LKR 0.00"
+                val cashDiff = reportData["cashDiff"] as? String ?: "LKR 0.00"
+
+                printLine("SALES SUMMARY", 20, alignLeft, true)
+                printTwoCols("Total Invoices:", totalInvoices, 20, false)
+                printTwoCols("Gross Sales:", grossSales, 20, false)
+                if (discount.isNotEmpty() && discount != "LKR 0.00") {
+                    printTwoCols("Discounts:", "-$discount", 20, false)
+                }
+                if (tax.isNotEmpty() && tax != "LKR 0.00") {
+                    printTwoCols("Tax:", tax, 20, false)
+                }
+                printTwoCols("NET SALES:", netSales, 22, true)
+                printLine("--------------------------------", 20, alignCenter, false)
+
+                printLine("PAYMENTS BREAKDOWN", 20, alignLeft, true)
+                printTwoCols("Cash Sales:", cashSales, 20, false)
+                printTwoCols("Card Sales:", cardSales, 20, false)
+                if (otherSales != "LKR 0.00" && otherSales.isNotEmpty()) {
+                    printTwoCols("Other / Credit:", otherSales, 20, false)
+                }
+                printLine("--------------------------------", 20, alignCenter, false)
+
+                printLine("DRAWER RECONCILIATION", 20, alignLeft, true)
+                printTwoCols("Opening Balance:", openingBalance, 20, false)
+                printTwoCols("+ Cash Sales:", cashSales, 20, false)
+                if (paidIn != "LKR 0.00" && paidIn.isNotEmpty()) {
+                    printTwoCols("+ Paid In (Entry):", paidIn, 20, false)
+                }
+                if (paidOut != "LKR 0.00" && paidOut.isNotEmpty()) {
+                    printTwoCols("- Paid Out (Expense):", "-$paidOut", 20, false)
+                }
+                printLine("--------------------------------", 20, alignCenter, false)
+                printTwoCols("Expected Cash:", expectedCash, 22, true)
+                printTwoCols("Actual Cash in Hand:", actualCash, 22, true)
+                printTwoCols("OVER / SHORT:", cashDiff, 24, true)
+            }
+
+            printLine("--------------------------------", 20, alignCenter, false)
+            printLine("", 16, alignLeft, false)
+            printLine("Cashier Signature: _____________", 20, alignLeft, false)
+            printLine("", 16, alignLeft, false)
+            printLine("Manager Signature: _____________", 20, alignLeft, false)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            // Feed paper
+            try {
+                pClass.getMethod("feedPaper", Int::class.javaPrimitiveType).invoke(p, 4)
+            } catch (_: Exception) {}
+
+            // Start Print via Listener Proxy
+            if (onPrintListenerClass != null) {
+                val listenerProxy = Proxy.newProxyInstance(
+                    onPrintListenerClass!!.classLoader,
+                    arrayOf(onPrintListenerClass)
+                ) { _, method, args ->
+                    if (method.name == "onPrintResult") {
+                        val resultCode = args?.getOrNull(0) as? Int ?: 0
+                        Log.d(TAG, "onPrintResult: $resultCode")
+                        if (resultCode == 0) {
+                            onComplete(true, null)
+                        } else {
+                            onComplete(false, "Print failed with code: $resultCode")
+                        }
+                    }
+                    null
+                }
+
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, true, listenerProxy)
+            } else {
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, false, null)
+                onComplete(true, null)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error during printShiftReport: ${e.message}", e)
             onComplete(false, e.message ?: "Unknown printer error")
         }
     }

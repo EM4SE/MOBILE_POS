@@ -47,5 +47,19 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <package android:name="wangpos.sdk4.libbasebinder"/>
+        <package android:name="com.wangpos.printerservice"/>
+        <package android:name="com.wiseasy.printer"/>
+        <package android:name="com.nexgo.smartpos"/>
+        <package android:name="com.nexgo.oaf.apiv3"/>
+        <intent>
+            <action android:name="wangpos.sdk4.libbasebinder.CoreService"/>
+        </intent>
+        <intent>
+            <action android:name="com.wangpos.printerservice.PrinterService"/>
+        </intent>
+        <intent>
+            <action android:name="com.wiseasy.printer.PrinterService"/>
+        </intent>
     </queries>
 </manifest>

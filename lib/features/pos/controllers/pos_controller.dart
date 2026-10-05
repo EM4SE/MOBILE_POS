@@ -22,6 +22,8 @@ class PosController extends ChangeNotifier {
   final List<SaleItem> _cartItems = [];
   Customer? _selectedCustomer;
   double _discountAmount = 0.0;
+  double? _discountPercentage;
+  bool _isDiscountPercentage = false;
   double _taxRate = 0.0; // percentage e.g. 0.0 or 0.08
   int? _editingIndex;
   bool _isLoading = false;
@@ -49,6 +51,8 @@ class PosController extends ChangeNotifier {
       await settingsRepository!.saveSetting('draft_cart_items', itemsJson);
       await settingsRepository!.saveSetting('draft_cart_customer', customerJson);
       await settingsRepository!.saveSetting('draft_cart_discount', _discountAmount.toString());
+      await settingsRepository!.saveSetting('draft_cart_discount_pct', (_discountPercentage ?? 0.0).toString());
+      await settingsRepository!.saveSetting('draft_cart_is_pct', _isDiscountPercentage.toString());
     } catch (e) {
       debugPrint('Error saving draft cart: $e');
     }
@@ -71,11 +75,20 @@ class PosController extends ChangeNotifier {
         _selectedCustomer = Customer.fromMap(jsonDecode(customerJson));
       }
 
+      final isPctStr = await settingsRepository!.getSetting('draft_cart_is_pct');
+      _isDiscountPercentage = isPctStr == 'true';
+
+      final pctStr = await settingsRepository!.getSetting('draft_cart_discount_pct');
+      if (pctStr != null && pctStr.isNotEmpty) {
+        _discountPercentage = double.tryParse(pctStr);
+      }
+
       final discountStr = await settingsRepository!.getSetting('draft_cart_discount');
       if (discountStr != null && discountStr.isNotEmpty) {
         _discountAmount = double.tryParse(discountStr) ?? 0.0;
       }
 
+      _recalculateDiscounts();
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading draft cart: $e');
@@ -100,6 +113,8 @@ class PosController extends ChangeNotifier {
   List<SaleItem> get cartItems => List.unmodifiable(_cartItems);
   Customer? get selectedCustomer => _selectedCustomer;
   double get discountAmount => _discountAmount;
+  double? get discountPercentage => _discountPercentage;
+  bool get isDiscountPercentage => _isDiscountPercentage;
   double get taxRate => _taxRate;
   int? get editingIndex => _editingIndex;
   bool get isLoading => _isLoading;
@@ -120,8 +135,9 @@ class PosController extends ChangeNotifier {
 
   // --- Calculations ---
 
-  double calculateItemTotal(double quantity, double unitPrice) {
-    return quantity * unitPrice;
+  double calculateItemTotal(double quantity, double unitPrice, [double discount = 0.0]) {
+    final gross = quantity * unitPrice;
+    return (gross - discount).clamp(0.0, double.infinity);
   }
 
   double get subtotal {
@@ -143,6 +159,20 @@ class PosController extends ChangeNotifier {
     return net.clamp(0.0, double.infinity);
   }
 
+  void _recalculateDiscounts() {
+    final currentSubtotal = subtotal;
+    if (_isDiscountPercentage && _discountPercentage != null && _discountPercentage! > 0) {
+      _discountAmount = (currentSubtotal * (_discountPercentage! / 100.0)).clamp(0.0, currentSubtotal);
+    } else {
+      _discountAmount = _discountAmount.clamp(0.0, currentSubtotal);
+    }
+    if (_cartItems.isEmpty) {
+      _discountAmount = 0.0;
+      _discountPercentage = null;
+      _isDiscountPercentage = false;
+    }
+  }
+
   // --- Cart Actions ---
 
   void addProductToCart(Product product, [double quantity = 1.0]) {
@@ -153,9 +183,13 @@ class PosController extends ChangeNotifier {
     if (existingIndex >= 0) {
       final existing = _cartItems[existingIndex];
       final newQty = existing.quantity + quantity;
+      final newDiscount = (existing.discount > 0 && existing.quantity > 0)
+          ? (existing.discount / existing.quantity) * newQty
+          : 0.0;
       _cartItems[existingIndex] = existing.copyWith(
         quantity: newQty,
-        lineTotal: calculateItemTotal(newQty, existing.unitPrice),
+        discount: newDiscount,
+        lineTotal: calculateItemTotal(newQty, existing.unitPrice, newDiscount),
       );
     } else {
       _cartItems.add(
@@ -166,11 +200,13 @@ class PosController extends ChangeNotifier {
           quantity: quantity,
           unitPrice: product.price,
           unitCost: product.cost,
-          lineTotal: calculateItemTotal(quantity, product.price),
+          discount: 0.0,
+          lineTotal: calculateItemTotal(quantity, product.price, 0.0),
         ),
       );
     }
     _errorMessage = null;
+    _recalculateDiscounts();
     saveDraftCart();
     notifyListeners();
   }
@@ -198,10 +234,12 @@ class PosController extends ChangeNotifier {
         productDescription: description.trim(),
         quantity: quantity,
         unitPrice: price,
-        lineTotal: calculateItemTotal(quantity, price),
+        discount: 0.0,
+        lineTotal: calculateItemTotal(quantity, price, 0.0),
       ),
     );
     _errorMessage = null;
+    _recalculateDiscounts();
     saveDraftCart();
     notifyListeners();
   }
@@ -215,10 +253,16 @@ class PosController extends ChangeNotifier {
     }
 
     final item = _cartItems[index];
+    final newDiscount = (item.discount > 0 && item.quantity > 0)
+        ? (item.discount / item.quantity) * newQuantity
+        : 0.0;
+
     _cartItems[index] = item.copyWith(
       quantity: newQuantity,
-      lineTotal: calculateItemTotal(newQuantity, item.unitPrice),
+      discount: newDiscount,
+      lineTotal: calculateItemTotal(newQuantity, item.unitPrice, newDiscount),
     );
+    _recalculateDiscounts();
     saveDraftCart();
     notifyListeners();
   }
@@ -228,10 +272,32 @@ class PosController extends ChangeNotifier {
     if (newPrice < 0) return;
 
     final item = _cartItems[index];
+    final gross = item.quantity * item.unitPrice;
+    final newGross = item.quantity * newPrice;
+    final newDiscount = (item.discount > 0 && gross > 0)
+        ? ((item.discount / gross) * newGross).clamp(0.0, newGross)
+        : 0.0;
+
     _cartItems[index] = item.copyWith(
       unitPrice: newPrice,
-      lineTotal: calculateItemTotal(item.quantity, newPrice),
+      discount: newDiscount,
+      lineTotal: calculateItemTotal(item.quantity, newPrice, newDiscount),
     );
+    _recalculateDiscounts();
+    saveDraftCart();
+    notifyListeners();
+  }
+
+  void updateItemDiscount(int index, double discount) {
+    if (index < 0 || index >= _cartItems.length) return;
+    final item = _cartItems[index];
+    final gross = item.quantity * item.unitPrice;
+    final validDisc = discount.clamp(0.0, gross);
+    _cartItems[index] = item.copyWith(
+      discount: validDisc,
+      lineTotal: calculateItemTotal(item.quantity, item.unitPrice, validDisc),
+    );
+    _recalculateDiscounts();
     saveDraftCart();
     notifyListeners();
   }
@@ -254,6 +320,7 @@ class PosController extends ChangeNotifier {
       if (_editingIndex == index) {
         _editingIndex = null;
       }
+      _recalculateDiscounts();
       saveDraftCart();
       notifyListeners();
     }
@@ -264,8 +331,14 @@ class PosController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDiscount(double discount) {
-    _discountAmount = discount.clamp(0.0, subtotal);
+  void setDiscount(double discount, {bool isPercentage = false, double? percentage}) {
+    _isDiscountPercentage = isPercentage;
+    _discountPercentage = percentage;
+    if (isPercentage && percentage != null && percentage > 0) {
+      _discountAmount = (subtotal * (percentage / 100.0)).clamp(0.0, subtotal);
+    } else {
+      _discountAmount = discount.clamp(0.0, subtotal);
+    }
     saveDraftCart();
     notifyListeners();
   }
@@ -286,6 +359,8 @@ class PosController extends ChangeNotifier {
     _cartItems.clear();
     _selectedCustomer = null;
     _discountAmount = 0.0;
+    _discountPercentage = null;
+    _isDiscountPercentage = false;
     _editingIndex = null;
     _errorMessage = null;
     saveDraftCart();

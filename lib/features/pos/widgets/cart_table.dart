@@ -10,6 +10,7 @@ class CartTable extends StatelessWidget {
   final int? selectedIndex;
   final void Function(int index, double qty) onQuantityChanged;
   final void Function(int index, double price) onPriceChanged;
+  final void Function(int index, double discount) onDiscountChanged;
   final void Function(int index) onDeleteItem;
   final void Function(int index) onSelectItem;
   final VoidCallback onAddProduct;
@@ -20,6 +21,7 @@ class CartTable extends StatelessWidget {
     this.selectedIndex,
     required this.onQuantityChanged,
     required this.onPriceChanged,
+    required this.onDiscountChanged,
     required this.onDeleteItem,
     required this.onSelectItem,
     required this.onAddProduct,
@@ -137,6 +139,7 @@ class CartTable extends StatelessWidget {
                         isEven: index.isEven,
                         onQuantityChanged: (newQty) => onQuantityChanged(index, newQty),
                         onPriceChanged: (newPrice) => onPriceChanged(index, newPrice),
+                        onDiscountChanged: (newDiscount) => onDiscountChanged(index, newDiscount),
                         onDelete: () => onDeleteItem(index),
                         onSelect: () => onSelectItem(index),
                       );

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../core/services/printer_service.dart';
 import '../../../data/repositories/settings_repository.dart';
 
 /// Controller managing POS terminal preferences, receipt printer settings, and store profile
@@ -20,9 +21,10 @@ class SettingsController extends ChangeNotifier {
   String get storePhone => _settings['store_phone'] ?? '+94 11 234 5678';
   String get currencySymbol => _settings['currency_symbol'] ?? 'Rs. ';
   String get taxRate => _settings['tax_rate'] ?? '0.0';
-  String get printerType => _settings['printer_type'] ?? 'Thermal 80mm';
+  String get printerType => _settings['printer_type'] ?? 'Thermal 58mm';
   String get printerIp => _settings['printer_ip'] ?? '192.168.1.100';
   String get invoicePrefix => _settings['invoice_prefix'] ?? 'INV-';
+  String get selectedDevice => _settings['selected_device'] ?? 'NEXGO_N5';
 
   Future<void> loadSettings() async {
     _isLoading = true;
@@ -32,6 +34,7 @@ class SettingsController extends ChangeNotifier {
     try {
       _settings = await _settingsRepository.getAllSettings();
       _isLoading = false;
+      PrinterService.setSelectedDevice(selectedDevice);
       notifyListeners();
     } catch (e) {
       _isLoading = false;
@@ -44,6 +47,9 @@ class SettingsController extends ChangeNotifier {
     try {
       await _settingsRepository.saveSetting(key, value);
       _settings[key] = value;
+      if (key == 'selected_device') {
+        PrinterService.setSelectedDevice(value);
+      }
       notifyListeners();
       return true;
     } catch (e) {
@@ -57,6 +63,9 @@ class SettingsController extends ChangeNotifier {
     try {
       await _settingsRepository.saveSettings(newSettings);
       _settings.addAll(newSettings);
+      if (newSettings.containsKey('selected_device')) {
+        PrinterService.setSelectedDevice(newSettings['selected_device']!);
+      }
       notifyListeners();
       return true;
     } catch (e) {

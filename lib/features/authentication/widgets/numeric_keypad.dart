@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_dimensions.dart';
 import '../../../app/theme/app_text_styles.dart';
 
 /// Seamless full-width touch keypad with guaranteed instant visual touch highlight
@@ -108,24 +107,30 @@ class NumericKeypad extends StatelessWidget {
                 backgroundColor: submitBackgroundColor ?? AppColors.primary,
                 pressedColor: submitPressedColor ?? const Color(0xFF003855), // Darker highlight
                 onTap: onSubmit,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (submitIcon != null || submitLabel.isEmpty) ...[
-                      Icon(submitIcon ?? Icons.check, size: 24, color: Colors.white),
-                      if (submitLabel.isNotEmpty) const SizedBox(width: AppDimensions.xs),
-                    ],
-                    if (submitLabel.isNotEmpty)
-                      Text(
-                        submitLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (submitIcon != null || submitLabel.isEmpty) ...[
+                          Icon(submitIcon ?? Icons.check, size: 22, color: Colors.white),
+                          if (submitLabel.isNotEmpty) const SizedBox(width: 4),
+                        ],
+                        if (submitLabel.isNotEmpty)
+                          Text(
+                            submitLabel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

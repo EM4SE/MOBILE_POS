@@ -79,6 +79,7 @@ class DatabaseMigrations {
         ${DatabaseConstants.colQuantity} REAL NOT NULL,
         ${DatabaseConstants.colUnitPrice} REAL NOT NULL,
         ${DatabaseConstants.colUnitCost} REAL NOT NULL DEFAULT 0.0,
+        discount REAL NOT NULL DEFAULT 0.0,
         ${DatabaseConstants.colLineTotal} REAL NOT NULL,
         FOREIGN KEY (${DatabaseConstants.colSaleId}) REFERENCES ${DatabaseConstants.tableSales} (${DatabaseConstants.colId}) ON DELETE CASCADE
       )
@@ -93,6 +94,46 @@ class DatabaseMigrations {
       )
     ''');
 
+    // 7. Business Days table
+    await db.execute('''
+      CREATE TABLE ${DatabaseConstants.tableBusinessDays} (
+        ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+        ${DatabaseConstants.colDayNumber} INTEGER NOT NULL,
+        ${DatabaseConstants.colOpenedAt} TEXT NOT NULL,
+        ${DatabaseConstants.colClosedAt} TEXT,
+        ${DatabaseConstants.colOpenedBy} TEXT NOT NULL,
+        ${DatabaseConstants.colClosedBy} TEXT,
+        ${DatabaseConstants.colOpeningBalance} REAL NOT NULL DEFAULT 0.0,
+        ${DatabaseConstants.colClosingBalance} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colExpectedBalance} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colTotalSales} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'OPEN'
+      )
+    ''');
+
+    // 8. Shifts table
+    await db.execute('''
+      CREATE TABLE ${DatabaseConstants.tableShifts} (
+        ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+        ${DatabaseConstants.colDayId} INTEGER NOT NULL,
+        ${DatabaseConstants.colShiftNumber} INTEGER NOT NULL,
+        ${DatabaseConstants.colOpenedAt} TEXT NOT NULL,
+        ${DatabaseConstants.colClosedAt} TEXT,
+        ${DatabaseConstants.colCashierUsername} TEXT NOT NULL,
+        ${DatabaseConstants.colCashierName} TEXT NOT NULL,
+        ${DatabaseConstants.colOpeningBalance} REAL NOT NULL DEFAULT 0.0,
+        ${DatabaseConstants.colClosingBalance} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colExpectedBalance} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colCashSales} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colTotalSales} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colPaidIn} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colPaidOut} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colCashDifference} REAL DEFAULT 0.0,
+        ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'OPEN',
+        FOREIGN KEY (${DatabaseConstants.colDayId}) REFERENCES ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colId}) ON DELETE CASCADE
+      )
+    ''');
+
     // Indices for optimal POS query performance on older hardware
     await db.execute('CREATE INDEX idx_products_code ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colCode});');
     await db.execute('CREATE INDEX idx_products_barcode ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colBarcode});');
@@ -101,6 +142,8 @@ class DatabaseMigrations {
     await db.execute('CREATE INDEX idx_sales_invoice ON ${DatabaseConstants.tableSales} (${DatabaseConstants.colInvoiceNo});');
     await db.execute('CREATE INDEX idx_sales_status ON ${DatabaseConstants.tableSales} (${DatabaseConstants.colStatus});');
     await db.execute('CREATE INDEX idx_sale_items_sale_id ON ${DatabaseConstants.tableSaleItems} (${DatabaseConstants.colSaleId});');
+    await db.execute('CREATE INDEX idx_business_days_status ON ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colStatus});');
+    await db.execute('CREATE INDEX idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
 
     // Seed Initial Data
     await _seedInitialData(db);
@@ -225,7 +268,60 @@ class DatabaseMigrations {
     }
   }
 
+  /// Ensure columns and tables added in updates exist on previously created databases
+  static Future<void> ensureSchemaUpdates(Database db) async {
+    try {
+      final columns = await db.rawQuery('PRAGMA table_info(${DatabaseConstants.tableSaleItems})');
+      final hasDiscountCol = columns.any((col) => col['name'] == 'discount');
+      if (!hasDiscountCol) {
+        await db.execute('ALTER TABLE ${DatabaseConstants.tableSaleItems} ADD COLUMN discount REAL NOT NULL DEFAULT 0.0');
+      }
+    } catch (_) {}
+
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${DatabaseConstants.tableBusinessDays} (
+          ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${DatabaseConstants.colDayNumber} INTEGER NOT NULL,
+          ${DatabaseConstants.colOpenedAt} TEXT NOT NULL,
+          ${DatabaseConstants.colClosedAt} TEXT,
+          ${DatabaseConstants.colOpenedBy} TEXT NOT NULL,
+          ${DatabaseConstants.colClosedBy} TEXT,
+          ${DatabaseConstants.colOpeningBalance} REAL NOT NULL DEFAULT 0.0,
+          ${DatabaseConstants.colClosingBalance} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colExpectedBalance} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colTotalSales} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'OPEN'
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${DatabaseConstants.tableShifts} (
+          ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${DatabaseConstants.colDayId} INTEGER NOT NULL,
+          ${DatabaseConstants.colShiftNumber} INTEGER NOT NULL,
+          ${DatabaseConstants.colOpenedAt} TEXT NOT NULL,
+          ${DatabaseConstants.colClosedAt} TEXT,
+          ${DatabaseConstants.colCashierUsername} TEXT NOT NULL,
+          ${DatabaseConstants.colCashierName} TEXT NOT NULL,
+          ${DatabaseConstants.colOpeningBalance} REAL NOT NULL DEFAULT 0.0,
+          ${DatabaseConstants.colClosingBalance} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colExpectedBalance} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colCashSales} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colTotalSales} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colPaidIn} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colPaidOut} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colCashDifference} REAL DEFAULT 0.0,
+          ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'OPEN'
+        )
+      ''');
+
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_business_days_status ON ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colStatus});');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
+    } catch (_) {}
+  }
+
   static Future<void> onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Schema migration steps for future versions
+    await ensureSchemaUpdates(db);
   }
 }
