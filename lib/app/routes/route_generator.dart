@@ -1,0 +1,188 @@
+import 'package:flutter/material.dart';
+import '../../core/services/authentication_service.dart';
+import '../../data/models/customer_model.dart';
+import '../../data/models/product_model.dart';
+import '../../data/models/sale_model.dart';
+import '../../features/authentication/controllers/login_controller.dart';
+import '../../features/authentication/screens/login_screen.dart';
+import '../../features/customers/controllers/customer_controller.dart';
+import '../../features/customers/screens/customer_form_screen.dart';
+import '../../features/customers/screens/customers_screen.dart';
+import '../../features/more/screens/more_screen.dart';
+import '../../features/pos/controllers/pos_controller.dart';
+import '../../features/pos/screens/bill_detail_screen.dart';
+import '../../features/pos/screens/cash_movement_screen.dart';
+import '../../features/pos/screens/discount_screen.dart';
+import '../../features/pos/screens/held_bills_screen.dart';
+import '../../features/pos/screens/payment_screen.dart';
+import '../../features/pos/screens/pos_screen.dart';
+import '../../features/products/controllers/product_controller.dart';
+import '../../features/products/screens/product_form_screen.dart';
+import '../../features/products/screens/products_screen.dart';
+import '../../features/settings/controllers/settings_controller.dart';
+import '../../features/settings/screens/settings_screen.dart';
+import 'app_routes.dart';
+
+/// Central RouteGenerator dispatching named routes with controller dependencies
+class RouteGenerator {
+  final AuthenticationService authService;
+  final LoginController loginController;
+  final PosController posController;
+  final ProductController productController;
+  final CustomerController customerController;
+  final SettingsController settingsController;
+
+  RouteGenerator({
+    required this.authService,
+    required this.loginController,
+    required this.posController,
+    required this.productController,
+    required this.customerController,
+    required this.settingsController,
+  });
+
+  Route<dynamic> generateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case AppRoutes.initial:
+      case AppRoutes.login:
+        return _buildRoute(
+          LoginScreen(controller: loginController),
+          settings,
+        );
+
+      case AppRoutes.pos:
+        return _buildRoute(
+          PosScreen(
+            controller: posController,
+            authService: authService,
+          ),
+          settings,
+        );
+
+      case AppRoutes.more:
+        return _buildRoute(
+          MoreScreen(
+            authService: authService,
+            posController: posController,
+          ),
+          settings,
+        );
+
+      case AppRoutes.products:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final isSelectionMode = args?['isSelectionMode'] as bool? ?? false;
+        final onSelected = args?['onProductSelected'] as void Function(Product)?;
+
+        return _buildRoute(
+          ProductsScreen(
+            controller: productController,
+            posController: posController,
+            isSelectionMode: isSelectionMode,
+            onProductSelected: onSelected,
+          ),
+          settings,
+        );
+
+      case AppRoutes.productForm:
+        final product = settings.arguments as Product?;
+        return _buildRoute(
+          ProductFormScreen(
+            controller: productController,
+            productToEdit: product,
+          ),
+          settings,
+        );
+
+      case AppRoutes.customers:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final isSelectionMode = args?['isSelectionMode'] as bool? ?? false;
+        final onSelected = args?['onCustomerSelected'] as void Function(Customer)?;
+
+        return _buildRoute(
+          CustomersScreen(
+            controller: customerController,
+            isSelectionMode: isSelectionMode,
+            onCustomerSelected: onSelected,
+          ),
+          settings,
+        );
+
+      case AppRoutes.customerForm:
+        final customer = settings.arguments as Customer?;
+        return _buildRoute(
+          CustomerFormScreen(
+            controller: customerController,
+            customerToEdit: customer,
+          ),
+          settings,
+        );
+
+      case AppRoutes.settings:
+        return _buildRoute(
+          SettingsScreen(
+            controller: settingsController,
+            authService: authService,
+          ),
+          settings,
+        );
+
+      case AppRoutes.payment:
+        return _buildRoute(
+          PaymentScreen(controller: posController),
+          settings,
+        );
+
+      case AppRoutes.billDetail:
+        final sale = settings.arguments as Sale;
+        return _buildRoute(
+          BillDetailScreen(sale: sale),
+          settings,
+        );
+
+      case AppRoutes.heldBills:
+        return _buildRoute(
+          HeldBillsScreen(posController: posController),
+          settings,
+        );
+
+      case AppRoutes.cashMovement:
+        final isPaidIn = (settings.arguments as bool?) ?? true;
+        return _buildRoute(
+          CashMovementScreen(isPaidIn: isPaidIn),
+          settings,
+        );
+
+      case AppRoutes.discount:
+        return _buildRoute(
+          DiscountScreen(posController: posController),
+          settings,
+        );
+
+      default:
+        return _errorRoute(settings.name);
+    }
+  }
+
+  PageRouteBuilder _buildRoute(Widget screen, RouteSettings settings) {
+    return PageRouteBuilder(
+      settings: settings,
+      pageBuilder: (context, animation, secondaryAnimation) => screen,
+      transitionDuration: const Duration(milliseconds: 150),
+      reverseTransitionDuration: const Duration(milliseconds: 150),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+    );
+  }
+
+  Route<dynamic> _errorRoute(String? routeName) {
+    return MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Text('No route defined for $routeName'),
+        ),
+      ),
+    );
+  }
+}
