@@ -15,6 +15,7 @@ class DatabaseConstants {
   static const String tableBusinessDays = 'business_days';
   static const String tableShifts = 'shifts';
   static const String tableExchangeVouchers = 'exchange_vouchers';
+  static const String tableCashMovements = 'cash_movements';
 
   // Exchange Vouchers Columns
   static const String colVoucherCode = 'voucher_code';

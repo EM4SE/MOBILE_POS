@@ -243,7 +243,11 @@ class RouteGenerator {
       case AppRoutes.cashMovement:
         final isPaidIn = (settings.arguments as bool?) ?? true;
         return _buildRoute(
-          CashMovementScreen(isPaidIn: isPaidIn),
+          CashMovementScreen(
+            isPaidIn: isPaidIn,
+            shiftService: shiftService,
+            authService: authService,
+          ),
           settings,
         );
 

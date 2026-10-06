@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../core/services/authentication_service.dart';
 import '../../../core/services/printer_service.dart';
+import '../../../core/services/shift_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../authentication/widgets/numeric_keypad.dart';
@@ -8,10 +10,14 @@ import '../../authentication/widgets/numeric_keypad.dart';
 /// Full-screen Cash In / Cash Out Screen with Hardware-friendly Numeric Keypad
 class CashMovementScreen extends StatefulWidget {
   final bool isPaidIn;
+  final ShiftService? shiftService;
+  final AuthenticationService? authService;
 
   const CashMovementScreen({
     super.key,
     required this.isPaidIn,
+    this.shiftService,
+    this.authService,
   });
 
   @override
@@ -80,13 +86,31 @@ class _CashMovementScreenState extends State<CashMovementScreen> {
 
     FeedbackHelper.playScanFeedback();
 
-    // Auto-print Paid In / Paid Out receipt
-    PrinterService.printCashMovementReceipt(
+    final cashierName = widget.authService?.currentUser.value?.displayName ?? 'Admin';
+
+    try {
+      // 1. Record cash movement in shift & database
+      if (widget.shiftService != null) {
+        await widget.shiftService!.recordCashMovement(
+          isPaidIn: widget.isPaidIn,
+          amount: amount,
+          reason: _selectedReason,
+          cashierName: cashierName,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error recording cash movement: $e');
+    }
+
+    // 2. Auto-print Paid In / Paid Out receipt
+    await PrinterService.printCashMovementReceipt(
       isPaidIn: widget.isPaidIn,
       amount: amount,
       reason: _selectedReason,
+      cashierName: cashierName,
     );
 
+    if (!mounted) return;
     Navigator.of(context).pop();
 
     ScaffoldMessenger.of(context).showSnackBar(

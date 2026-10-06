@@ -111,12 +111,15 @@ class PosSummary extends StatelessWidget {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  'Exchange (${controller.appliedExchangeVoucher!.voucherCode}): -${CurrencyFormatter.formatWithSymbol(controller.exchangeVoucherCredit)}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFFEA580C),
+                                Flexible(
+                                  child: Text(
+                                    'Exch (${controller.appliedExchangeVoucher!.voucherCode}): -${CurrencyFormatter.formatWithSymbol(controller.exchangeVoucherCredit)}',
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFFEA580C),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
@@ -131,30 +134,38 @@ class PosSummary extends StatelessWidget {
                       ),
                     ),
 
-                    // Right side: Prominent Grand Total Display
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        const Text(
-                          'TOTAL: ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.5,
+                    const SizedBox(width: 6),
+
+                    // Right side: Prominent Grand Total Display (fitted to prevent overflow)
+                    Flexible(
+                      flex: 0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          const Text(
+                            'TOTAL: ',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                        Text(
-                          CurrencyFormatter.formatWithSymbol(grandTotal),
-                          style: const TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              CurrencyFormatter.formatWithSymbol(grandTotal),
+                              style: const TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.primary,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

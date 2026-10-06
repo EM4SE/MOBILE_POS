@@ -22,6 +22,12 @@ abstract class ShiftService {
     required User user,
   });
   Future<ShiftSummaryStats> getCurrentShiftStats();
+  Future<void> recordCashMovement({
+    required bool isPaidIn,
+    required double amount,
+    required String reason,
+    required String cashierName,
+  });
   Future<void> endShift({
     required double actualClosingCash,
     required User user,
@@ -127,6 +133,22 @@ class ShiftServiceImpl implements ShiftService {
   }
 
   @override
+  Future<void> recordCashMovement({
+    required bool isPaidIn,
+    required double amount,
+    required String reason,
+    required String cashierName,
+  }) async {
+    await _repository.recordCashMovement(
+      isPaidIn: isPaidIn,
+      amount: amount,
+      reason: reason,
+      cashierName: cashierName,
+    );
+    await checkActiveSession();
+  }
+
+  @override
   Future<void> endShift({
     required double actualClosingCash,
     required User user,
@@ -172,6 +194,7 @@ class ShiftServiceImpl implements ShiftService {
     _activeShift.value = null;
 
     if (performDayEnd && currentDay != null) {
+      final dayStats = await _repository.getDayStats(currentDay);
       final closedDay = await _repository.closeDay(
         day: currentDay,
         actualClosingCash: actualClosingCash,
@@ -187,19 +210,19 @@ class ShiftServiceImpl implements ShiftService {
         isEndReport: true,
         openedAt: closedDay.openedAt,
         openingBalance: closedDay.openingBalance,
-        totalInvoices: stats.totalInvoices,
-        grossSales: stats.grossSales,
-        discount: stats.totalDiscount,
-        tax: stats.totalTax,
+        totalInvoices: dayStats.totalInvoices,
+        grossSales: dayStats.grossSales,
+        discount: dayStats.totalDiscount,
+        tax: dayStats.totalTax,
         netSales: closedDay.totalSales,
-        cashSales: stats.cashSales,
-        cardSales: stats.cardSales,
-        otherSales: stats.otherSales,
-        paidIn: stats.paidIn,
-        paidOut: stats.paidOut,
-        expectedCash: stats.expectedCash,
+        cashSales: dayStats.cashSales,
+        cardSales: dayStats.cardSales,
+        otherSales: dayStats.otherSales,
+        paidIn: dayStats.paidIn,
+        paidOut: dayStats.paidOut,
+        expectedCash: dayStats.expectedCash,
         actualCash: actualClosingCash,
-        cashDiff: closedShift.cashDifference,
+        cashDiff: actualClosingCash - dayStats.expectedCash,
       );
 
       _activeDay.value = null;

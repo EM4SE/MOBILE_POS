@@ -667,7 +667,7 @@ class PosController extends ChangeNotifier {
         customerId: _selectedCustomer?.id,
         customerName: _selectedCustomer?.name ?? 'Walk-in Customer',
         subtotal: subtotal,
-        discount: _discountAmount + exchangeVoucherCredit,
+        discount: _discountAmount,
         tax: taxAmount,
         grandTotal: grandTotal,
         paidAmount: paidAmount,

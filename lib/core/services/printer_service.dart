@@ -71,6 +71,7 @@ class PrinterService {
         };
       }).toList();
 
+      final exchangeCredit = (sale.subtotal - sale.discount + sale.tax - sale.grandTotal).clamp(0.0, double.infinity);
       final receiptData = {
         'appName': AppConstants.appName,
         'invoiceNo': sale.invoiceNo,
@@ -80,6 +81,7 @@ class PrinterService {
         'items': itemsPayload,
         'subtotal': CurrencyFormatter.formatWithSymbol(sale.subtotal),
         'discount': sale.discount > 0 ? CurrencyFormatter.formatWithSymbol(sale.discount) : '',
+        'exchangeCredit': exchangeCredit > 0.01 ? CurrencyFormatter.formatWithSymbol(exchangeCredit) : '',
         'tax': sale.tax > 0 ? CurrencyFormatter.formatWithSymbol(sale.tax) : '',
         'grandTotal': CurrencyFormatter.formatWithSymbol(sale.grandTotal),
         'payments': paymentsList,

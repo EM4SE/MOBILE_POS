@@ -20,6 +20,12 @@ abstract class ShiftRepository {
   });
   Future<ShiftSummaryStats> getShiftStats(Shift shift);
   Future<ShiftSummaryStats> getDayStats(BusinessDay day);
+  Future<void> recordCashMovement({
+    required bool isPaidIn,
+    required double amount,
+    required String reason,
+    required String cashierName,
+  });
   Future<Shift> closeShift({
     required Shift shift,
     required double actualClosingCash,
@@ -77,6 +83,19 @@ class ShiftRepositoryImpl implements ShiftRepository {
 
   @override
   Future<ShiftSummaryStats> getDayStats(BusinessDay day) => _datasource.getDayStats(day);
+
+  @override
+  Future<void> recordCashMovement({
+    required bool isPaidIn,
+    required double amount,
+    required String reason,
+    required String cashierName,
+  }) => _datasource.recordCashMovement(
+    isPaidIn: isPaidIn,
+    amount: amount,
+    reason: reason,
+    cashierName: cashierName,
+  );
 
   @override
   Future<Shift> closeShift({

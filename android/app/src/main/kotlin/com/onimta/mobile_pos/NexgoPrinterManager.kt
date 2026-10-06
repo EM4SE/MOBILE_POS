@@ -216,12 +216,16 @@ class NexgoPrinterManager(private val context: Context) {
             // Summary Totals
             val subtotal = receiptData["subtotal"] as? String ?: ""
             val discount = receiptData["discount"] as? String ?: ""
+            val exchangeCredit = receiptData["exchangeCredit"] as? String ?: ""
             val tax = receiptData["tax"] as? String ?: ""
             val grandTotal = receiptData["grandTotal"] as? String ?: ""
 
             printTwoCols("Subtotal:", subtotal, 22, false)
             if (discount.isNotEmpty() && discount != "LKR 0.00") {
                 printTwoCols("Discount:", "-$discount", 22, false)
+            }
+            if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00") {
+                printTwoCols("Exchange Credit:", "-$exchangeCredit", 22, false)
             }
             if (tax.isNotEmpty() && tax != "LKR 0.00") {
                 printTwoCols("Tax:", tax, 22, false)
@@ -703,31 +707,46 @@ class NexgoPrinterManager(private val context: Context) {
             printTwoCols("TOTAL CREDIT VALUE:", totalAmount, 26, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            // Try printing barcode natively if supported
-            var barcodePrinted = false
-            try {
-                val appendBarcodeMethod = pClass.methods.firstOrNull { it.name == "appendBarcode" }
-                if (appendBarcodeMethod != null) {
-                    val params = appendBarcodeMethod.parameterTypes
-                    if (params.size >= 2 && params[0] == String::class.java) {
-                        if (params.size == 2) {
-                            appendBarcodeMethod.invoke(p, voucherCode, 60)
-                            barcodePrinted = true
-                        } else if (params.size >= 5) {
-                            val formatEnum = pClass.classLoader?.loadClass("com.nexgo.oaf.apiv3.device.printer.BarcodeFormatEnum")
-                                ?.let { cls -> java.lang.Enum.valueOf(cls as Class<out Enum<*>>, "CODE_128") }
-                            appendBarcodeMethod.invoke(p, voucherCode, 300, 60, 0, alignCenter, formatEnum)
-                            barcodePrinted = true
+            // 1. Razor-sharp 1D Code-128 Barcode Image
+            val barcodeBmp = BarcodeBitmapHelper.createCrispCode128(voucherCode, 384, 110)
+            if (barcodeBmp != null) {
+                try {
+                    val appendImageMethod = pClass.methods.firstOrNull { it.name == "appendImage" }
+                    if (appendImageMethod != null) {
+                        val pTypes = appendImageMethod.parameterTypes
+                        if (pTypes.size == 1 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, barcodeBmp)
+                        } else if (pTypes.size >= 2 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, barcodeBmp, alignCenter)
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "appendImage barcode error: ${e.message}")
                 }
-            } catch (_: Exception) {}
+            }
 
-            // Print visual barcode block
-            printLine("||| |||| | ||||| ||| || ||||", 20, alignCenter, true)
             printLine("* $voucherCode *", 22, alignCenter, true)
+
+            // 2. High-contrast QR Code for fast 2D / Camera Scanning
+            val qrBmp = BarcodeBitmapHelper.createCrispQrCode(voucherCode, 180)
+            if (qrBmp != null) {
+                try {
+                    val appendImageMethod = pClass.methods.firstOrNull { it.name == "appendImage" }
+                    if (appendImageMethod != null) {
+                        val pTypes = appendImageMethod.parameterTypes
+                        if (pTypes.size == 1 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, qrBmp)
+                        } else if (pTypes.size >= 2 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, qrBmp, alignCenter)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "appendImage QR error: ${e.message}")
+                }
+            }
+
             printLine("--------------------------------", 20, alignCenter, false)
-            printLine("Present this voucher barcode to redeem", 18, alignCenter, false)
+            printLine("Scan barcode or QR code to redeem", 18, alignCenter, false)
             printLine("exchange credit on your next bill.", 18, alignCenter, false)
             printLine("--------------------------------", 20, alignCenter, false)
 
@@ -1240,30 +1259,46 @@ class NexgoPrinterManager(private val context: Context) {
             printTwoCols("HELD AMOUNT:", totalAmount, 26, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            // Try printing barcode natively if supported
-            var barcodePrinted = false
-            try {
-                val appendBarcodeMethod = pClass.methods.firstOrNull { it.name == "appendBarcode" }
-                if (appendBarcodeMethod != null) {
-                    val params = appendBarcodeMethod.parameterTypes
-                    if (params.size >= 2 && params[0] == String::class.java) {
-                        if (params.size == 2) {
-                            appendBarcodeMethod.invoke(p, holdNo, 60)
-                            barcodePrinted = true
-                        } else if (params.size >= 5) {
-                            val formatEnum = pClass.classLoader?.loadClass("com.nexgo.oaf.apiv3.device.printer.BarcodeFormatEnum")
-                                ?.let { cls -> java.lang.Enum.valueOf(cls as Class<out Enum<*>>, "CODE_128") }
-                            appendBarcodeMethod.invoke(p, holdNo, 300, 60, 0, alignCenter, formatEnum)
-                            barcodePrinted = true
+            // 1. Razor-sharp 1D Code-128 Barcode Image
+            val barcodeBmp = BarcodeBitmapHelper.createCrispCode128(holdNo, 384, 110)
+            if (barcodeBmp != null) {
+                try {
+                    val appendImageMethod = pClass.methods.firstOrNull { it.name == "appendImage" }
+                    if (appendImageMethod != null) {
+                        val pTypes = appendImageMethod.parameterTypes
+                        if (pTypes.size == 1 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, barcodeBmp)
+                        } else if (pTypes.size >= 2 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, barcodeBmp, alignCenter)
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "appendImage barcode error: ${e.message}")
                 }
-            } catch (_: Exception) {}
+            }
 
-            printLine("||| |||| | ||||| ||| || ||||", 20, alignCenter, true)
             printLine("* $holdNo *", 22, alignCenter, true)
+
+            // 2. High-contrast QR Code for fast 2D / Camera Scanning
+            val qrBmp = BarcodeBitmapHelper.createCrispQrCode(holdNo, 180)
+            if (qrBmp != null) {
+                try {
+                    val appendImageMethod = pClass.methods.firstOrNull { it.name == "appendImage" }
+                    if (appendImageMethod != null) {
+                        val pTypes = appendImageMethod.parameterTypes
+                        if (pTypes.size == 1 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, qrBmp)
+                        } else if (pTypes.size >= 2 && pTypes[0] == Bitmap::class.java) {
+                            appendImageMethod.invoke(p, qrBmp, alignCenter)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "appendImage QR error: ${e.message}")
+                }
+            }
+
             printLine("--------------------------------", 20, alignCenter, false)
-            printLine("Scan barcode at POS to recall bill.", 18, alignCenter, false)
+            printLine("Scan barcode / QR code at POS to recall.", 18, alignCenter, false)
             printLine("Note: Active cart must be empty to recall.", 18, alignCenter, false)
             printLine("--------------------------------", 20, alignCenter, false)
 

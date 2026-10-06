@@ -197,10 +197,61 @@ class ShiftLocalDatasource {
     return Shift.fromMap({...shiftMap, DatabaseConstants.colId: shiftId});
   }
 
+  /// Records a Paid In (Cash Entry) or Paid Out (Cash Expense) movement into SQLite
+  Future<void> recordCashMovement({
+    required bool isPaidIn,
+    required double amount,
+    required String reason,
+    required String cashierName,
+  }) async {
+    final db = await _dbHelper.database;
+    final now = DateTime.now().toIso8601String();
+
+    final activeShift = await getActiveShift() ?? await getLatestShift();
+    final activeDay = await getActiveDay() ?? await getLatestDay();
+
+    if (activeShift != null) {
+      if (isPaidIn) {
+        await db.rawUpdate('''
+          UPDATE ${DatabaseConstants.tableShifts}
+          SET ${DatabaseConstants.colPaidIn} = ${DatabaseConstants.colPaidIn} + ?
+          WHERE ${DatabaseConstants.colId} = ?
+        ''', [amount, activeShift.id]);
+      } else {
+        await db.rawUpdate('''
+          UPDATE ${DatabaseConstants.tableShifts}
+          SET ${DatabaseConstants.colPaidOut} = ${DatabaseConstants.colPaidOut} + ?
+          WHERE ${DatabaseConstants.colId} = ?
+        ''', [amount, activeShift.id]);
+      }
+    }
+
+    try {
+      await db.insert(DatabaseConstants.tableCashMovements, {
+        DatabaseConstants.colDayId: activeDay?.id,
+        'shift_id': activeShift?.id,
+        'type': isPaidIn ? 'PAID_IN' : 'PAID_OUT',
+        'amount': amount,
+        'reason': reason,
+        'cashier_name': cashierName,
+        DatabaseConstants.colCreatedAt: now,
+      });
+    } catch (_) {}
+  }
+
   /// Calculates real-time sales, returns, payment breakdown, and expected drawer balance for a shift
   Future<ShiftSummaryStats> getShiftStats(Shift shift) async {
     final db = await _dbHelper.database;
-    final openedAt = shift.openedAt;
+
+    // Fetch latest shift from DB to avoid stale in-memory paidIn/paidOut values
+    final shiftRows = await db.query(
+      DatabaseConstants.tableShifts,
+      where: '${DatabaseConstants.colId} = ?',
+      whereArgs: [shift.id],
+      limit: 1,
+    );
+    final currentShift = shiftRows.isNotEmpty ? Shift.fromMap(shiftRows.first) : shift;
+    final openedAt = currentShift.openedAt;
 
     final sales = await db.query(
       DatabaseConstants.tableSales,
@@ -213,6 +264,26 @@ class ShiftLocalDatasource {
       where: '${DatabaseConstants.colCreatedAt} >= ? AND ${DatabaseConstants.colStatus} = ?',
       whereArgs: [openedAt, 'RETURNED'],
     );
+
+    double shiftPaidIn = currentShift.paidIn;
+    double shiftPaidOut = currentShift.paidOut;
+
+    // Also check cash_movements table for shift
+    try {
+      final cmResult = await db.rawQuery('''
+        SELECT 
+          SUM(CASE WHEN type = 'PAID_IN' THEN amount ELSE 0 END) as total_cm_in,
+          SUM(CASE WHEN type = 'PAID_OUT' THEN amount ELSE 0 END) as total_cm_out
+        FROM ${DatabaseConstants.tableCashMovements}
+        WHERE shift_id = ? OR (created_at >= ? AND created_at <= ?)
+      ''', [currentShift.id, openedAt, currentShift.closedAt ?? DateTime.now().toIso8601String()]);
+      if (cmResult.isNotEmpty) {
+        final cmIn = ((cmResult.first['total_cm_in'] as num?) ?? 0.0).toDouble();
+        final cmOut = ((cmResult.first['total_cm_out'] as num?) ?? 0.0).toDouble();
+        if (cmIn > shiftPaidIn) shiftPaidIn = cmIn;
+        if (cmOut > shiftPaidOut) shiftPaidOut = cmOut;
+      }
+    } catch (_) {}
 
     int totalInvoices = sales.length;
     double grossSales = 0.0;
@@ -264,7 +335,7 @@ class ShiftLocalDatasource {
     }
 
     final totalNetRevenue = grandTotalSales - totalReturnsAmount;
-    final double expectedCash = shift.openingBalance + cashSales + shift.paidIn - shift.paidOut - cashRefunds;
+    final double expectedCash = currentShift.openingBalance + cashSales + shiftPaidIn - shiftPaidOut - cashRefunds;
 
     return ShiftSummaryStats(
       totalInvoices: totalInvoices,
@@ -280,10 +351,10 @@ class ShiftLocalDatasource {
       qrSales: qrSales,
       creditSales: creditSales,
       otherSales: otherSales,
-      paidIn: shift.paidIn,
-      paidOut: shift.paidOut,
+      paidIn: shiftPaidIn,
+      paidOut: shiftPaidOut,
       cashRefunds: cashRefunds,
-      openingBalance: shift.openingBalance,
+      openingBalance: currentShift.openingBalance,
       expectedCash: expectedCash,
     );
   }
@@ -312,8 +383,25 @@ class ShiftLocalDatasource {
       WHERE ${DatabaseConstants.colDayId} = ?
     ''', [day.id]);
 
-    final paidIn = ((shiftsResult.first['total_paid_in'] as num?) ?? 0.0).toDouble();
-    final paidOut = ((shiftsResult.first['total_paid_out'] as num?) ?? 0.0).toDouble();
+    double paidIn = ((shiftsResult.first['total_paid_in'] as num?) ?? 0.0).toDouble();
+    double paidOut = ((shiftsResult.first['total_paid_out'] as num?) ?? 0.0).toDouble();
+
+    // Also verify with cash_movements table for this day
+    try {
+      final cmResult = await db.rawQuery('''
+        SELECT 
+          SUM(CASE WHEN type = 'PAID_IN' THEN amount ELSE 0 END) as total_cm_in,
+          SUM(CASE WHEN type = 'PAID_OUT' THEN amount ELSE 0 END) as total_cm_out
+        FROM ${DatabaseConstants.tableCashMovements}
+        WHERE day_id = ? OR (created_at >= ? AND created_at <= ?)
+      ''', [day.id, openedAt, day.closedAt ?? DateTime.now().toIso8601String()]);
+      if (cmResult.isNotEmpty) {
+        final cmIn = ((cmResult.first['total_cm_in'] as num?) ?? 0.0).toDouble();
+        final cmOut = ((cmResult.first['total_cm_out'] as num?) ?? 0.0).toDouble();
+        if (cmIn > paidIn) paidIn = cmIn;
+        if (cmOut > paidOut) paidOut = cmOut;
+      }
+    } catch (_) {}
 
     int totalInvoices = sales.length;
     double grossSales = 0.0;

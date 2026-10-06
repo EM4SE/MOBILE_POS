@@ -291,6 +291,12 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                       _buildSummaryRow('Subtotal', CurrencyFormatter.formatWithSymbol(widget.sale.subtotal)),
                       if (widget.sale.discount > 0)
                         _buildSummaryRow('Discount', '-${CurrencyFormatter.formatWithSymbol(widget.sale.discount)}', valueColor: AppColors.warning),
+                      if ((widget.sale.subtotal - widget.sale.discount + widget.sale.tax - widget.sale.grandTotal) > 0.01)
+                        _buildSummaryRow(
+                          'Exchange Credit',
+                          '-${CurrencyFormatter.formatWithSymbol((widget.sale.subtotal - widget.sale.discount + widget.sale.tax - widget.sale.grandTotal))}',
+                          valueColor: const Color(0xFFEA580C),
+                        ),
                       if (widget.sale.tax > 0)
                         _buildSummaryRow('Tax', CurrencyFormatter.formatWithSymbol(widget.sale.tax)),
                       const SizedBox(height: 4),

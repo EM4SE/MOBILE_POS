@@ -152,6 +152,20 @@ class DatabaseMigrations {
       )
     ''');
 
+    // 10. Cash Movements table (Paid In / Paid Out audit trail)
+    await db.execute('''
+      CREATE TABLE ${DatabaseConstants.tableCashMovements} (
+        ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+        ${DatabaseConstants.colDayId} INTEGER,
+        shift_id INTEGER,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        reason TEXT NOT NULL,
+        cashier_name TEXT NOT NULL,
+        ${DatabaseConstants.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
     // Indices for optimal POS query performance on older hardware
     await db.execute('CREATE INDEX idx_products_code ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colCode});');
     await db.execute('CREATE INDEX idx_products_barcode ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colBarcode});');
@@ -163,6 +177,7 @@ class DatabaseMigrations {
     await db.execute('CREATE INDEX idx_business_days_status ON ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colStatus});');
     await db.execute('CREATE INDEX idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
     await db.execute('CREATE INDEX idx_exchange_voucher_code ON ${DatabaseConstants.tableExchangeVouchers} (${DatabaseConstants.colVoucherCode});');
+    await db.execute('CREATE INDEX idx_cash_movements_shift ON ${DatabaseConstants.tableCashMovements} (shift_id);');
 
     // Seed Initial Data
     await _seedInitialData(db);
@@ -437,9 +452,23 @@ class DatabaseMigrations {
         )
       ''');
 
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${DatabaseConstants.tableCashMovements} (
+          ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${DatabaseConstants.colDayId} INTEGER,
+          shift_id INTEGER,
+          type TEXT NOT NULL,
+          amount REAL NOT NULL,
+          reason TEXT NOT NULL,
+          cashier_name TEXT NOT NULL,
+          ${DatabaseConstants.colCreatedAt} TEXT NOT NULL
+        )
+      ''');
+
       await db.execute('CREATE INDEX IF NOT EXISTS idx_business_days_status ON ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colStatus});');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_voucher_code ON ${DatabaseConstants.tableExchangeVouchers} (${DatabaseConstants.colVoucherCode});');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_movements_shift ON ${DatabaseConstants.tableCashMovements} (shift_id);');
     } catch (_) {}
   }
 

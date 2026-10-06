@@ -325,10 +325,8 @@ class _XReadingScreenState extends State<XReadingScreen> {
                                     const Divider(height: 12),
                                     _buildRow('Opening Float', CurrencyFormatter.formatWithSymbol(s.openingBalance)),
                                     _buildRow('+ Cash Sales', CurrencyFormatter.formatWithSymbol(st.cashSales)),
-                                    if (st.paidIn > 0)
-                                      _buildRow('+ Paid In (Float additions)', CurrencyFormatter.formatWithSymbol(st.paidIn)),
-                                    if (st.paidOut > 0)
-                                      _buildRow('- Paid Out (Expenses)', '-${CurrencyFormatter.formatWithSymbol(st.paidOut)}', valueColor: AppColors.error),
+                                    _buildRow('+ Paid In (Cash Entry)', CurrencyFormatter.formatWithSymbol(st.paidIn)),
+                                    _buildRow('- Paid Out (Cash Expense)', '-${CurrencyFormatter.formatWithSymbol(st.paidOut)}', valueColor: st.paidOut > 0 ? AppColors.error : null),
                                     if (st.cashRefunds > 0)
                                       _buildRow('- Cash Returns / Refunds', '-${CurrencyFormatter.formatWithSymbol(st.cashRefunds)}', valueColor: AppColors.error),
                                     const Divider(height: 10),

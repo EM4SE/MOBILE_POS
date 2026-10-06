@@ -273,6 +273,7 @@ class Wpos3PrinterManager(private val context: Context) {
                 val items = receiptData["items"] as? List<Map<String, Any?>> ?: emptyList()
                 val subtotal = receiptData["subtotal"] as? String ?: ""
                 val discount = receiptData["discount"] as? String ?: ""
+                val exchangeCredit = receiptData["exchangeCredit"] as? String ?: ""
                 val tax = receiptData["tax"] as? String ?: ""
                 val grandTotal = receiptData["grandTotal"] as? String ?: ""
                 val payments = receiptData["payments"] as? List<Map<String, Any?>> ?: emptyList()
@@ -302,6 +303,7 @@ class Wpos3PrinterManager(private val context: Context) {
                         items = items,
                         subtotal = subtotal,
                         discount = discount,
+                        exchangeCredit = exchangeCredit,
                         tax = tax,
                         grandTotal = grandTotal,
                         payments = payments,
@@ -653,6 +655,7 @@ class Wpos3PrinterManager(private val context: Context) {
         items: List<Map<String, Any?>>,
         subtotal: String,
         discount: String,
+        exchangeCredit: String = "",
         tax: String,
         grandTotal: String,
         payments: List<Map<String, Any?>>,
@@ -739,6 +742,9 @@ class Wpos3PrinterManager(private val context: Context) {
         drawTwoCols("Subtotal:", subtotal, 20f, false)
         if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
             drawTwoCols("Discount:", "-$discount", 20f, false)
+        }
+        if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00" && exchangeCredit != "0.00") {
+            drawTwoCols("Exchange Credit:", "-$exchangeCredit", 20f, false)
         }
         if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
             drawTwoCols("Tax:", tax, 20f, false)
@@ -1020,10 +1026,23 @@ class Wpos3PrinterManager(private val context: Context) {
         drawDivider(false)
 
         y += 10f
-        drawCenter("||| |||| | ||||| ||| || ||||", 20f, true)
-        drawCenter("* $voucherCode *", 22f, true)
+        val barcodeBmp = BarcodeBitmapHelper.createCrispCode128(voucherCode, width, 110)
+        if (barcodeBmp != null) {
+            val left = (width - barcodeBmp.width) / 2f
+            canvas.drawBitmap(barcodeBmp, left, y, null)
+            y += barcodeBmp.height + 8f
+        }
+        drawCenter("* $voucherCode *", 20f, true)
+
+        val qrBmp = BarcodeBitmapHelper.createCrispQrCode(voucherCode, 180)
+        if (qrBmp != null) {
+            val qrLeft = (width - qrBmp.width) / 2f
+            canvas.drawBitmap(qrBmp, qrLeft, y, null)
+            y += qrBmp.height + 8f
+        }
+
         drawDivider(true)
-        drawCenter("Present this voucher barcode to redeem", 16f, false)
+        drawCenter("Scan barcode or QR code to redeem", 16f, false)
         drawCenter("exchange credit on your next bill.", 16f, false)
         y += 20f
 
@@ -1244,10 +1263,23 @@ class Wpos3PrinterManager(private val context: Context) {
         drawDivider(false)
 
         y += 10f
-        drawCenter("||| |||| | ||||| ||| || ||||", 20f, true)
+        val barcodeBmp = BarcodeBitmapHelper.createCrispCode128(holdNo, width, 110)
+        if (barcodeBmp != null) {
+            val left = (width - barcodeBmp.width) / 2f
+            canvas.drawBitmap(barcodeBmp, left, y, null)
+            y += barcodeBmp.height + 8f
+        }
         drawCenter("* $holdNo *", 20f, true)
+
+        val qrBmp = BarcodeBitmapHelper.createCrispQrCode(holdNo, 180)
+        if (qrBmp != null) {
+            val qrLeft = (width - qrBmp.width) / 2f
+            canvas.drawBitmap(qrBmp, qrLeft, y, null)
+            y += qrBmp.height + 8f
+        }
+
         drawDivider(true)
-        drawCenter("Scan barcode at POS to recall bill.", 16f, false)
+        drawCenter("Scan barcode / QR code at POS to recall.", 16f, false)
         drawCenter("Note: Active cart must be empty to recall.", 16f, false)
         drawDivider(false)
         y += 20f
