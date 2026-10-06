@@ -251,63 +251,69 @@ class HeldBillsScreen extends StatelessWidget {
                               bill.invoiceNo,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 color: AppColors.accent,
                                 letterSpacing: 0.5,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
                               _formatDateTime(bill.createdAt),
                               style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w500,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
 
+                      const SizedBox(width: 6),
+
                       // 2. Middle: Total Amount
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
                         child: Text(
                           CurrencyFormatter.formatWithSymbol(bill.grandTotal),
                           style: const TextStyle(
                             fontWeight: FontWeight.w900,
-                            fontSize: 14.5,
+                            fontSize: 13.5,
                             color: AppColors.success,
                           ),
                         ),
                       ),
+
+                      const SizedBox(width: 6),
 
                       // 3. Right: Single Row Action Buttons (Discard & Recall)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                            icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 19),
                             tooltip: 'Discard',
                             visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.all(6),
-                            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
                             onPressed: () => _handleDiscard(context, bill),
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 2),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF0D6EFD), // POS Blue
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              minimumSize: const Size(54, 32),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: const Size(48, 30),
                             ),
                             onPressed: () => _handleRecall(context, bill),
                             child: const Text(
                               'RECALL',
-                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10.5, letterSpacing: 0.5),
                             ),
                           ),
                         ],

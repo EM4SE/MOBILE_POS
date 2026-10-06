@@ -36,6 +36,42 @@ class MoreScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
+  // Action: EXCHANGE (Dedicated Screen)
+  // ---------------------------------------------------------------------------
+  void _handleExchange(BuildContext context) {
+    FeedbackHelper.vibrate();
+    if (posController.cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add items to cart before issuing exchange.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pushNamed(AppRoutes.exchange);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Action: RETURN (Dedicated Screen)
+  // ---------------------------------------------------------------------------
+  void _handleReturn(BuildContext context) {
+    FeedbackHelper.vibrate();
+    if (posController.cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add items to cart to process a return.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pushNamed(AppRoutes.returnItem);
+  }
+
+  // ---------------------------------------------------------------------------
   // Action: DISCOUNT
   // ---------------------------------------------------------------------------
   Future<void> _handleDiscount(BuildContext context) async {
@@ -358,7 +394,27 @@ class MoreScreen extends StatelessWidget {
                     onTap: () => _handleDiscount(context),
                   ),
 
-                  // 4. HELD BILL (Dedicated Full Screen)
+                  // 4. EXCHANGE (Print Voucher with Barcode)
+                  _buildSquareTile(
+                    context: context,
+                    label: 'EXCHANGE',
+                    icon: Icons.sync_alt,
+                    color: const Color(0xFFEA580C), // Orange Amber
+                    badgeText: posController.cartItems.isNotEmpty ? '${posController.totalItemCount}' : null,
+                    onTap: () => _handleExchange(context),
+                  ),
+
+                  // 5. RETURN (Item Return & Refund Without Credit)
+                  _buildSquareTile(
+                    context: context,
+                    label: 'RETURN',
+                    icon: Icons.assignment_return,
+                    color: const Color(0xFFE11D48), // Crimson Rose
+                    badgeText: posController.cartItems.isNotEmpty ? '${posController.totalItemCount}' : null,
+                    onTap: () => _handleReturn(context),
+                  ),
+
+                  // 6. HELD BILL (Dedicated Full Screen)
                   _buildSquareTile(
                     context: context,
                     label: 'HELD BILL',

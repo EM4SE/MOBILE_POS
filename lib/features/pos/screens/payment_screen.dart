@@ -76,6 +76,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _selectMethod(String methodValue) {
     FeedbackHelper.vibrate();
+    if (methodValue == 'Credit' && widget.controller.selectedCustomer == null) {
+      AppDialog.showSnackBar(
+        context,
+        'Credit payment requires an assigned Customer. Please select a Customer first.',
+        isError: true,
+      );
+      return;
+    }
     setState(() {
       _selectedMethod = methodValue;
       final rem = _remainingDue;
@@ -91,7 +99,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _isFirstInput = false;
       String nextVal = digit;
       
-      // Prevent non-cash methods from exceeding remaining due
+      // Prevent non-cash and credit methods from exceeding remaining due
       if (_selectedMethod != 'Cash') {
         final parsed = CurrencyFormatter.parseDouble(nextVal);
         if (parsed > _remainingDue) {
@@ -114,7 +122,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     
     String nextVal = _tenderInput == '0' ? digit : _tenderInput + digit;
     
-    // Prevent non-cash methods from exceeding remaining due
+    // Prevent non-cash and credit methods from exceeding remaining due
     if (_selectedMethod != 'Cash') {
       final parsed = CurrencyFormatter.parseDouble(nextVal);
       if (parsed > _remainingDue) {
@@ -201,7 +209,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
-    // Double check non-cash overpayment
+    // Require customer for Credit
+    if (_selectedMethod == 'Credit' && widget.controller.selectedCustomer == null) {
+      AppDialog.showSnackBar(
+        context,
+        'Credit payment requires an assigned Customer. Please select a Customer first.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Double check non-cash & credit overpayment
     if (_selectedMethod != 'Cash' && amount > _remainingDue) {
       AppDialog.showSnackBar(
         context,
@@ -227,7 +245,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
-    // Check if non-cash overpayment happened
+    // Require customer if Credit is used
+    final hasCredit = _selectedMethod == 'Credit' || _paymentEntries.any((e) => e.method == 'Credit');
+    if (hasCredit && widget.controller.selectedCustomer == null) {
+      AppDialog.showSnackBar(
+        context,
+        'Credit payment requires an assigned Customer. Please select a Customer first.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Check if non-cash or credit overpayment happened
     if (_selectedMethod != 'Cash' && _currentEnteredAmount > _remainingDue) {
       AppDialog.showSnackBar(
         context,
@@ -473,6 +502,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             ),
                           ],
                         ),
+                        if (widget.controller.appliedExchangeVoucher != null) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Exchange (${widget.controller.appliedExchangeVoucher!.voucherCode}):',
+                                style: const TextStyle(color: Color(0xFFFDBA74), fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                              Text(
+                                '-${CurrencyFormatter.formatWithSymbol(widget.controller.exchangeVoucherCredit)}',
+                                style: const TextStyle(color: Color(0xFFFDBA74), fontWeight: FontWeight.w900, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ],
                         if (_paymentEntries.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           const Divider(color: Colors.white24, height: 1),
@@ -497,6 +542,63 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             ],
                           ),
                         ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // Customer Indicator Strip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: widget.controller.selectedCustomer != null
+                          ? const Color(0xFF0F766E).withOpacity(0.12)
+                          : const Color(0xFFE2E8F0),
+                      border: Border.all(
+                        color: widget.controller.selectedCustomer != null
+                            ? const Color(0xFF0F766E).withOpacity(0.4)
+                            : AppColors.border,
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          widget.controller.selectedCustomer != null
+                              ? Icons.person_rounded
+                              : Icons.person_outline,
+                          size: 15,
+                          color: widget.controller.selectedCustomer != null
+                              ? const Color(0xFF0F766E)
+                              : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            widget.controller.selectedCustomer != null
+                                ? 'Customer: ${widget.controller.selectedCustomer!.name} (${widget.controller.selectedCustomer!.phone.isNotEmpty ? widget.controller.selectedCustomer!.phone : "No Phone"})'
+                                : 'Customer: Walk-in (No customer assigned)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: widget.controller.selectedCustomer != null
+                                  ? const Color(0xFF0F766E)
+                                  : AppColors.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (widget.controller.selectedCustomer == null)
+                          const Text(
+                            'CREDIT DISABLED',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFD97706),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                       ],
                     ),
                   ),

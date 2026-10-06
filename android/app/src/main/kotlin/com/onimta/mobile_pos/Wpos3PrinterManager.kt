@@ -540,6 +540,106 @@ class Wpos3PrinterManager(private val context: Context) {
         }.start()
     }
 
+    fun printExchangeReceipt(
+        exchangeData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        Thread {
+            try {
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
+                }
+
+                val target = printerInstance ?: printerServiceBinder
+                if (target != null) {
+                    val targetClass = target.javaClass
+                    cacheMethods(targetClass)
+
+                    try {
+                        printInitMethod?.invoke(target)
+                        clearCacheMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    val bitmap = renderExchangeBitmap(exchangeData)
+
+                    if (printPictureMethod != null) {
+                        try {
+                            val params = printPictureMethod!!.parameterTypes
+                            if (params.size == 1 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap)
+                            } else if (params.size == 2 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap, 1)
+                            }
+                        } catch (_: Throwable) {}
+                    }
+
+                    try {
+                        printPaperMethod?.invoke(target, 4)
+                        printFinishMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    onComplete(true, null)
+                } else {
+                    onComplete(false, "W-POS 3 printer service not connected")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error printing exchange receipt on W-POS 3: ${e.message}", e)
+                onComplete(false, "W-POS 3 print error: ${e.message}")
+            }
+        }.start()
+    }
+
+    fun printReturnReceipt(
+        returnData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        Thread {
+            try {
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
+                }
+
+                val target = printerInstance ?: printerServiceBinder
+                if (target != null) {
+                    val targetClass = target.javaClass
+                    cacheMethods(targetClass)
+
+                    try {
+                        printInitMethod?.invoke(target)
+                        clearCacheMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    val bitmap = renderReturnBitmap(returnData)
+
+                    if (printPictureMethod != null) {
+                        try {
+                            val params = printPictureMethod!!.parameterTypes
+                            if (params.size == 1 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap)
+                            } else if (params.size == 2 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap, 1)
+                            }
+                        } catch (_: Throwable) {}
+                    }
+
+                    try {
+                        printPaperMethod?.invoke(target, 4)
+                        printFinishMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    onComplete(true, null)
+                } else {
+                    onComplete(false, "W-POS 3 printer service not connected")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error printing return receipt on W-POS 3: ${e.message}", e)
+                onComplete(false, "W-POS 3 print error: ${e.message}")
+            }
+        }.start()
+    }
+
     // ==========================================
     // 58mm (384px width) Bitmap Rendering Engine
     // ==========================================
@@ -832,6 +932,198 @@ class Wpos3PrinterManager(private val context: Context) {
         drawCenter("____________________________", 16f, false)
         drawCenter("Supervisor / Cashier Signature", 16f, false)
         y += 30f
+
+        return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
+    }
+
+    private fun renderExchangeBitmap(exchangeData: Map<String, Any?>): Bitmap {
+        val width = 384
+        val items = exchangeData["items"] as? List<Map<String, Any?>> ?: emptyList()
+        val estimatedHeight = 550 + (items.size * 55)
+        val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val paint = Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
+        var y = 35f
+
+        fun drawCenter(text: String, size: Float, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, width / 2f, y, paint)
+            y += size + 8f
+        }
+
+        fun drawDivider(dotted: Boolean = true) {
+            paint.textSize = 16f
+            paint.typeface = Typeface.MONOSPACE
+            paint.textAlign = Paint.Align.CENTER
+            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
+            canvas.drawText(line, width / 2f, y, paint)
+            y += 22f
+        }
+
+        fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(left, 14f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(right, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = exchangeData["appName"] as? String ?: "ONIMTA POS"
+        val voucherCode = exchangeData["voucherCode"] as? String ?: ""
+        val totalAmount = exchangeData["totalAmount"] as? String ?: "LKR 0.00"
+        val customerName = exchangeData["customerName"] as? String ?: "Walk-in Customer"
+        val cashierName = exchangeData["cashierName"] as? String ?: "Admin"
+        val dateTime = exchangeData["dateTime"] as? String ?: ""
+
+        drawCenter(appName, 26f, true)
+        drawCenter("EXCHANGE VOUCHER / SLIP", 20f, true)
+        drawDivider(false)
+
+        drawTwoCols("Voucher #:", voucherCode, 22f, true)
+        drawTwoCols("Date:", dateTime, 18f, false)
+        drawTwoCols("Cashier:", cashierName, 18f, false)
+        if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
+            drawTwoCols("Customer:", customerName, 18f, false)
+        }
+        drawDivider(true)
+
+        drawCenter("EXCHANGED ITEMS RETURNED", 19f, true)
+        drawDivider(true)
+
+        for (item in items) {
+            val desc = item["description"] as? String ?: ""
+            val qty = item["qty"] as? String ?: "1"
+            val price = item["price"] as? String ?: ""
+            val total = item["total"] as? String ?: ""
+
+            paint.textSize = 20f
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(desc, 14f, y, paint)
+            y += 26f
+
+            drawTwoCols("  $qty x $price", total, 18f, false)
+        }
+
+        drawDivider(false)
+        drawTwoCols("TOTAL CREDIT VALUE:", totalAmount, 24f, true)
+        drawDivider(false)
+
+        y += 10f
+        drawCenter("||| |||| | ||||| ||| || ||||", 20f, true)
+        drawCenter("* $voucherCode *", 22f, true)
+        drawDivider(true)
+        drawCenter("Present this voucher barcode to redeem", 16f, false)
+        drawCenter("exchange credit on your next bill.", 16f, false)
+        y += 20f
+
+        return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
+    }
+
+    private fun renderReturnBitmap(returnData: Map<String, Any?>): Bitmap {
+        val width = 384
+        val items = returnData["items"] as? List<Map<String, Any?>> ?: emptyList()
+        val estimatedHeight = 550 + (items.size * 55)
+        val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val paint = Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
+        var y = 35f
+
+        fun drawCenter(text: String, size: Float, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, width / 2f, y, paint)
+            y += size + 8f
+        }
+
+        fun drawDivider(dotted: Boolean = true) {
+            paint.textSize = 16f
+            paint.typeface = Typeface.MONOSPACE
+            paint.textAlign = Paint.Align.CENTER
+            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
+            canvas.drawText(line, width / 2f, y, paint)
+            y += 22f
+        }
+
+        fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(left, 14f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(right, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = returnData["appName"] as? String ?: "ONIMTA POS"
+        val returnNo = returnData["returnNo"] as? String ?: ""
+        val refundAmount = returnData["refundAmount"] as? String ?: "LKR 0.00"
+        val paymentMethod = returnData["paymentMethod"] as? String ?: "Cash"
+        val reason = returnData["reason"] as? String ?: "Customer Return"
+        val customerName = returnData["customerName"] as? String ?: "Walk-in Customer"
+        val cashierName = returnData["cashierName"] as? String ?: "Admin"
+        val dateTime = returnData["dateTime"] as? String ?: ""
+
+        drawCenter(appName, 26f, true)
+        drawCenter("RETURN / REFUND RECEIPT", 20f, true)
+        drawDivider(false)
+
+        drawTwoCols("Return Ref #:", returnNo, 20f, true)
+        drawTwoCols("Date:", dateTime, 18f, false)
+        drawTwoCols("Cashier:", cashierName, 18f, false)
+        if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
+            drawTwoCols("Customer:", customerName, 18f, false)
+        }
+        drawTwoCols("Reason:", reason, 18f, false)
+        drawDivider(true)
+
+        drawCenter("RETURNED ITEMS", 19f, true)
+        drawDivider(true)
+
+        for (item in items) {
+            val desc = item["description"] as? String ?: ""
+            val qty = item["qty"] as? String ?: "1"
+            val price = item["price"] as? String ?: ""
+            val total = item["total"] as? String ?: ""
+
+            paint.textSize = 20f
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(desc, 14f, y, paint)
+            y += 26f
+
+            drawTwoCols("  $qty x $price", total, 18f, false)
+        }
+
+        drawDivider(false)
+        drawTwoCols("REFUNDED VIA:", paymentMethod, 20f, true)
+        drawTwoCols("TOTAL REFUNDED:", refundAmount, 24f, true)
+        drawDivider(false)
+
+        y += 30f
+        drawCenter("____________________________", 16f, false)
+        drawCenter("Cashier Signature", 16f, false)
+        y += 20f
+        drawCenter("____________________________", 16f, false)
+        drawCenter("Customer Signature", 16f, false)
+        y += 20f
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
     }

@@ -2,22 +2,27 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../../../core/exceptions/app_exceptions.dart';
 import '../../../core/services/authentication_service.dart';
+import '../../../core/services/printer_service.dart';
+import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/customer_model.dart';
+import '../../../data/models/exchange_voucher_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/models/sale_item_model.dart';
 import '../../../data/models/sale_model.dart';
 import '../../../data/repositories/customer_repository.dart';
+import '../../../data/repositories/exchange_repository.dart';
 import '../../../data/repositories/product_repository.dart';
 import '../../../data/repositories/sales_repository.dart';
 import '../../../data/repositories/settings_repository.dart';
 
-/// POS Controller managing billing cart state, calculations, discounts, hold bills, and checkout
+/// POS Controller managing billing cart state, calculations, discounts, exchange vouchers, returns, hold bills, and checkout
 class PosController extends ChangeNotifier {
   final SalesRepository salesRepository;
   final ProductRepository productRepository;
   final CustomerRepository customerRepository;
   final AuthenticationService authService;
   final SettingsRepository? settingsRepository;
+  final ExchangeRepository? exchangeRepository;
 
   final List<SaleItem> _cartItems = [];
   Customer? _selectedCustomer;
@@ -29,6 +34,9 @@ class PosController extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Active Applied Exchange Voucher Credit for Current Cart
+  ExchangeVoucher? _appliedExchangeVoucher;
+
   // Held Bills in Memory / Session
   final List<Sale> _heldBills = [];
 
@@ -38,6 +46,7 @@ class PosController extends ChangeNotifier {
     required this.customerRepository,
     required this.authService,
     this.settingsRepository,
+    this.exchangeRepository,
   }) {
     loadHeldBills();
     loadDraftCart();
@@ -120,6 +129,7 @@ class PosController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   List<Sale> get heldBills => List.unmodifiable(_heldBills);
+  ExchangeVoucher? get appliedExchangeVoucher => _appliedExchangeVoucher;
 
   int get totalItemCount {
     int count = 0;
@@ -148,14 +158,20 @@ class PosController extends ChangeNotifier {
     return sum;
   }
 
+  double get exchangeVoucherCredit {
+    if (_appliedExchangeVoucher == null) return 0.0;
+    final balanceAfterDiscount = (subtotal - _discountAmount).clamp(0.0, double.infinity);
+    return _appliedExchangeVoucher!.remainingAmount.clamp(0.0, balanceAfterDiscount);
+  }
+
   double get taxAmount {
     if (_taxRate <= 0) return 0.0;
-    final taxable = (subtotal - _discountAmount).clamp(0.0, double.infinity);
+    final taxable = (subtotal - _discountAmount - exchangeVoucherCredit).clamp(0.0, double.infinity);
     return taxable * _taxRate;
   }
 
   double get grandTotal {
-    final net = subtotal - _discountAmount + taxAmount;
+    final net = subtotal - _discountAmount - exchangeVoucherCredit + taxAmount;
     return net.clamp(0.0, double.infinity);
   }
 
@@ -361,10 +377,180 @@ class PosController extends ChangeNotifier {
     _discountAmount = 0.0;
     _discountPercentage = null;
     _isDiscountPercentage = false;
+    _appliedExchangeVoucher = null;
     _editingIndex = null;
     _errorMessage = null;
     saveDraftCart();
     notifyListeners();
+  }
+
+  // --- Exchange Voucher Application ---
+
+  Future<bool> applyExchangeVoucherCode(String code) async {
+    final clean = code.trim().toUpperCase();
+    if (clean.isEmpty) return false;
+
+    if (exchangeRepository == null) {
+      throw const PosOperationException('Exchange repository not initialized');
+    }
+
+    final voucher = await exchangeRepository!.getVoucherByCode(clean);
+    if (voucher == null) {
+      throw PosOperationException('No exchange voucher found matching: $clean');
+    }
+
+    if (!voucher.isActive) {
+      throw PosOperationException(
+        'Voucher $clean is already ${voucher.status.toLowerCase()} or has zero balance.',
+      );
+    }
+
+    _appliedExchangeVoucher = voucher;
+    FeedbackHelper.playScanFeedback();
+    notifyListeners();
+    return true;
+  }
+
+  void removeAppliedExchangeVoucher() {
+    _appliedExchangeVoucher = null;
+    notifyListeners();
+  }
+
+  // --- Process Exchange Voucher Issuance ---
+
+  Future<ExchangeVoucher> processExchange() async {
+    if (_cartItems.isEmpty) {
+      throw const PosOperationException('Cannot create exchange with an empty cart');
+    }
+
+    if (exchangeRepository == null) {
+      throw const PosOperationException('Exchange repository unavailable');
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final voucherCode = await exchangeRepository!.generateNextVoucherCode();
+      final exchangeTotal = (subtotal - _discountAmount).clamp(0.0, double.infinity);
+      final cashier = authService.currentUser.value?.displayName ?? 'Admin';
+      final now = DateTime.now().toIso8601String();
+
+      final itemsPayload = _cartItems.map((i) => {
+        'description': i.productDescription,
+        'quantity': i.quantity,
+        'unitPrice': i.unitPrice,
+        'lineTotal': i.lineTotal,
+      }).toList();
+
+      final voucher = ExchangeVoucher(
+        voucherCode: voucherCode,
+        customerId: _selectedCustomer?.id,
+        customerName: _selectedCustomer?.name ?? 'Walk-in Customer',
+        totalAmount: exchangeTotal,
+        remainingAmount: exchangeTotal,
+        itemsJson: jsonEncode(itemsPayload),
+        status: 'ACTIVE',
+        cashierName: cashier,
+        createdAt: now,
+      );
+
+      await exchangeRepository!.insertVoucher(voucher);
+
+      // Print Exchange Voucher Receipt with Barcode
+      await PrinterService.printExchangeReceipt(
+        voucherCode: voucherCode,
+        totalAmount: exchangeTotal,
+        customerName: _selectedCustomer?.name,
+        cashierName: cashier,
+        items: itemsPayload,
+      );
+
+      clearCart();
+      _isLoading = false;
+      notifyListeners();
+
+      return voucher;
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Failed to issue exchange voucher: $e';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // --- Process Return / Refund ---
+
+  Future<Sale> processReturn({
+    required String paymentMethod,
+    String? reason,
+  }) async {
+    if (_cartItems.isEmpty) {
+      throw const PosOperationException('Cannot return an empty cart');
+    }
+
+    if (paymentMethod.trim().toLowerCase() == 'credit') {
+      throw const PosOperationException('Return refund cannot be processed via Credit.');
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final baseInvoiceNo = await salesRepository.generateNextInvoiceNumber();
+      final returnInvoiceNo = baseInvoiceNo.replaceFirst('INV-', 'RET-');
+      final returnTotal = (subtotal - _discountAmount).clamp(0.0, double.infinity);
+      final cashier = authService.currentUser.value?.displayName ?? 'Admin';
+      final now = DateTime.now().toIso8601String();
+
+      final returnSale = Sale(
+        invoiceNo: returnInvoiceNo,
+        customerId: _selectedCustomer?.id,
+        customerName: _selectedCustomer?.name ?? 'Walk-in Customer',
+        subtotal: subtotal,
+        discount: _discountAmount,
+        tax: taxAmount,
+        grandTotal: returnTotal,
+        paidAmount: returnTotal,
+        changeAmount: 0.0,
+        paymentMethod: paymentMethod,
+        status: 'RETURNED',
+        cashierName: cashier,
+        createdAt: now,
+      );
+
+      final saleId = await salesRepository.insertSaleWithItems(returnSale, _cartItems);
+      final completedReturn = returnSale.copyWith(id: saleId, items: List.from(_cartItems));
+
+      final itemsPayload = _cartItems.map((i) => {
+        'description': i.productDescription,
+        'quantity': i.quantity,
+        'unitPrice': i.unitPrice,
+        'lineTotal': i.lineTotal,
+      }).toList();
+
+      // Print Return Receipt
+      await PrinterService.printReturnReceipt(
+        returnNo: returnInvoiceNo,
+        refundAmount: returnTotal,
+        paymentMethod: paymentMethod,
+        reason: reason ?? 'Customer Return',
+        customerName: _selectedCustomer?.name,
+        cashierName: cashier,
+        items: itemsPayload,
+      );
+
+      clearCart();
+      _isLoading = false;
+      notifyListeners();
+
+      return completedReturn;
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Failed to process return: $e';
+      notifyListeners();
+      rethrow;
+    }
   }
 
   // --- Hold and Resume Bills ---
@@ -439,12 +625,22 @@ class PosController extends ChangeNotifier {
       final invoiceNo = await salesRepository.generateNextInvoiceNumber();
       final change = (paidAmount - grandTotal).clamp(0.0, double.infinity);
 
+      // Finalize applied exchange voucher if present
+      if (_appliedExchangeVoucher != null && exchangeRepository != null) {
+        final creditToRedeem = exchangeVoucherCredit;
+        await exchangeRepository!.redeemVoucher(
+          _appliedExchangeVoucher!.voucherCode,
+          invoiceNo,
+          creditToRedeem,
+        );
+      }
+
       final sale = Sale(
         invoiceNo: invoiceNo,
         customerId: _selectedCustomer?.id,
         customerName: _selectedCustomer?.name ?? 'Walk-in Customer',
         subtotal: subtotal,
-        discount: _discountAmount,
+        discount: _discountAmount + exchangeVoucherCredit,
         tax: taxAmount,
         grandTotal: grandTotal,
         paidAmount: paidAmount,
@@ -470,11 +666,20 @@ class PosController extends ChangeNotifier {
     }
   }
 
-  // Quick search product by code/barcode to add directly
+  // Quick search product by code/barcode to add directly, or apply Exchange Voucher barcode
   Future<bool> quickAddByCodeOrBarcode(String query) async {
     if (query.trim().isEmpty) return false;
     final clean = query.trim();
 
+    // 1. Check if it's an Exchange Voucher barcode (e.g. EXC-123456 or existing voucher)
+    if (clean.toUpperCase().startsWith('EXC-') || clean.toUpperCase().startsWith('EXC')) {
+      try {
+        final applied = await applyExchangeVoucherCode(clean);
+        if (applied) return true;
+      } catch (_) {}
+    }
+
+    // 2. Product Barcode / Code search
     final product = await productRepository.getProductByBarcode(clean) ??
         await productRepository.getProductByCode(clean);
 
@@ -482,6 +687,15 @@ class PosController extends ChangeNotifier {
       addProductToCart(product);
       return true;
     }
+
+    // 3. Fallback: try voucher lookup in case code doesn't start with EXC
+    if (exchangeRepository != null) {
+      try {
+        final applied = await applyExchangeVoucherCode(clean);
+        if (applied) return true;
+      } catch (_) {}
+    }
+
     return false;
   }
 }

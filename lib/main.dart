@@ -7,12 +7,14 @@ import 'core/database/database_initializer.dart';
 import 'core/services/authentication_service.dart';
 import 'core/services/database_service.dart';
 import 'data/datasources/local/customer_local_datasource.dart';
+import 'data/datasources/local/exchange_local_datasource.dart';
 import 'data/datasources/local/product_local_datasource.dart';
 import 'data/datasources/local/sales_local_datasource.dart';
 import 'data/datasources/local/settings_local_datasource.dart';
 import 'data/datasources/local/shift_local_datasource.dart';
 import 'data/datasources/local/user_local_datasource.dart';
 import 'data/repositories/customer_repository.dart';
+import 'data/repositories/exchange_repository.dart';
 import 'data/repositories/product_repository.dart';
 import 'data/repositories/sales_repository.dart';
 import 'data/repositories/settings_repository.dart';
@@ -51,6 +53,7 @@ void main() async {
   final SalesLocalDataSource salesLocalDataSource = SalesLocalDataSourceImpl(databaseService);
   final SettingsLocalDataSource settingsLocalDataSource = SettingsLocalDataSourceImpl(databaseService);
   final ShiftLocalDatasource shiftLocalDatasource = ShiftLocalDatasource(DatabaseHelper.instance);
+  final ExchangeLocalDataSource exchangeLocalDataSource = ExchangeLocalDataSourceImpl(databaseService);
 
   // 3. Repository Layer
   final UserRepository userRepository = UserRepositoryImpl(userLocalDataSource);
@@ -59,6 +62,7 @@ void main() async {
   final SalesRepository salesRepository = SalesRepositoryImpl(salesLocalDataSource);
   final SettingsRepository settingsRepository = SettingsRepositoryImpl(settingsLocalDataSource);
   final ShiftRepository shiftRepository = ShiftRepositoryImpl(shiftLocalDatasource);
+  final ExchangeRepository exchangeRepository = ExchangeRepositoryImpl(exchangeLocalDataSource);
 
   // 4. Core Authentication & Shift Services
   final AuthenticationService authService = AuthenticationServiceImpl(userRepository);
@@ -72,6 +76,7 @@ void main() async {
     customerRepository: customerRepository,
     authService: authService,
     settingsRepository: settingsRepository,
+    exchangeRepository: exchangeRepository,
   );
   final ProductController productController = ProductController(productRepository);
   final CustomerController customerController = CustomerController(customerRepository);

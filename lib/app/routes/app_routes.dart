@@ -16,6 +16,8 @@ class AppRoutes {
   static const String heldBills = '/held-bills';
   static const String cashMovement = '/cash-movement';
   static const String discount = '/discount';
+  static const String exchange = '/exchange';
+  static const String returnItem = '/return';
   static const String startShift = '/start-shift';
   static const String endShift = '/end-shift';
 }

@@ -3,6 +3,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../core/services/authentication_service.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/customer_model.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../controllers/pos_controller.dart';
@@ -44,8 +45,15 @@ class _PosScreenState extends State<PosScreen> {
     if (!mounted) return;
     if (added) {
       _barcodeInputController.clear();
+      if (widget.controller.appliedExchangeVoucher != null &&
+          widget.controller.appliedExchangeVoucher!.voucherCode == code.trim().toUpperCase()) {
+        AppDialog.showSnackBar(
+          context,
+          'Exchange voucher applied: ${CurrencyFormatter.formatWithSymbol(widget.controller.exchangeVoucherCredit)} credit deduction',
+        );
+      }
     } else {
-      AppDialog.showSnackBar(context, 'No product matches: $code', isError: true);
+      AppDialog.showSnackBar(context, 'No product or active voucher matches: $code', isError: true);
     }
   }
 
@@ -105,8 +113,8 @@ class _PosScreenState extends State<PosScreen> {
                         controller: _barcodeInputController,
                         style: const TextStyle(fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Enter Code / Barcode (Press Enter)...',
-                          hintStyle: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                          hintText: 'Enter Code / Barcode / Voucher (Press Enter)...',
+                          hintStyle: const TextStyle(fontSize: 11.5, color: AppColors.textLight),
                           filled: true,
                           fillColor: AppColors.surface,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
@@ -120,12 +128,12 @@ class _PosScreenState extends State<PosScreen> {
                     ),
                   ),
 
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
 
                   // 2. Dedicated Camera Scanner Button with Scanner Icon
                   SizedBox(
                     height: 40,
-                    width: 44,
+                    width: 42,
                     child: Tooltip(
                       message: 'Scan Barcode with Camera',
                       child: ElevatedButton(
@@ -139,12 +147,12 @@ class _PosScreenState extends State<PosScreen> {
                           elevation: 1,
                         ),
                         onPressed: _openCameraBarcodeScanner,
-                        child: const Icon(Icons.qr_code_scanner, size: 22),
+                        child: const Icon(Icons.qr_code_scanner, size: 20),
                       ),
                     ),
                   ),
 
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
 
                   // 3. PRODUCTS Button
                   SizedBox(

@@ -14,9 +14,11 @@ import '../../features/pos/controllers/pos_controller.dart';
 import '../../features/pos/screens/bill_detail_screen.dart';
 import '../../features/pos/screens/cash_movement_screen.dart';
 import '../../features/pos/screens/discount_screen.dart';
+import '../../features/pos/screens/exchange_screen.dart';
 import '../../features/pos/screens/held_bills_screen.dart';
 import '../../features/pos/screens/payment_screen.dart';
 import '../../features/pos/screens/pos_screen.dart';
+import '../../features/pos/screens/return_screen.dart';
 import '../../features/products/controllers/product_controller.dart';
 import '../../features/products/screens/product_form_screen.dart';
 import '../../features/products/screens/products_screen.dart';
@@ -193,6 +195,18 @@ class RouteGenerator {
       case AppRoutes.discount:
         return _buildRoute(
           DiscountScreen(posController: posController),
+          settings,
+        );
+
+      case AppRoutes.exchange:
+        return _buildRoute(
+          ExchangeScreen(controller: posController),
+          settings,
+        );
+
+      case AppRoutes.returnItem:
+        return _buildRoute(
+          ReturnScreen(controller: posController),
           settings,
         );
 

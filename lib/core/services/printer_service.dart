@@ -178,4 +178,90 @@ class PrinterService {
       return PrinterResult(false, e.toString());
     }
   }
+
+  /// Print Exchange Receipt Voucher with Barcode
+  static Future<PrinterResult> printExchangeReceipt({
+    required String voucherCode,
+    required double totalAmount,
+    required List<Map<String, dynamic>> items,
+    String? customerName,
+    String? cashierName,
+    String? dateTime,
+  }) async {
+    try {
+      final itemsPayload = items.map((item) {
+        final qty = (item['quantity'] as num?)?.toDouble() ?? 1.0;
+        final price = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
+        final total = (item['lineTotal'] as num?)?.toDouble() ?? (qty * price);
+        return {
+          'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString(),
+          'qty': CurrencyFormatter.formatQuantity(qty),
+          'price': CurrencyFormatter.formatWithSymbol(price),
+          'total': CurrencyFormatter.formatWithSymbol(total),
+        };
+      }).toList();
+
+      final payload = {
+        'appName': AppConstants.appName,
+        'voucherCode': voucherCode,
+        'totalAmount': CurrencyFormatter.formatWithSymbol(totalAmount),
+        'customerName': customerName ?? 'Walk-in Customer',
+        'cashierName': cashierName ?? 'Admin',
+        'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
+        'items': itemsPayload,
+      };
+
+      final bool result = await _channel.invokeMethod('printExchangeReceipt', payload);
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
+
+  /// Print Return & Refund Receipt
+  static Future<PrinterResult> printReturnReceipt({
+    required String returnNo,
+    required double refundAmount,
+    required String paymentMethod,
+    required List<Map<String, dynamic>> items,
+    String? reason,
+    String? customerName,
+    String? cashierName,
+    String? dateTime,
+  }) async {
+    try {
+      final itemsPayload = items.map((item) {
+        final qty = (item['quantity'] as num?)?.toDouble() ?? 1.0;
+        final price = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
+        final total = (item['lineTotal'] as num?)?.toDouble() ?? (qty * price);
+        return {
+          'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString(),
+          'qty': CurrencyFormatter.formatQuantity(qty),
+          'price': CurrencyFormatter.formatWithSymbol(price),
+          'total': CurrencyFormatter.formatWithSymbol(total),
+        };
+      }).toList();
+
+      final payload = {
+        'appName': AppConstants.appName,
+        'returnNo': returnNo,
+        'refundAmount': CurrencyFormatter.formatWithSymbol(refundAmount),
+        'paymentMethod': paymentMethod,
+        'reason': reason ?? 'Customer Return',
+        'customerName': customerName ?? 'Walk-in Customer',
+        'cashierName': cashierName ?? 'Admin',
+        'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
+        'items': itemsPayload,
+      };
+
+      final bool result = await _channel.invokeMethod('printReturnReceipt', payload);
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
 }

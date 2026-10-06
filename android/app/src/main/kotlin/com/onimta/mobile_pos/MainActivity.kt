@@ -199,6 +199,74 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "printExchangeReceipt" -> {
+                    val arguments = call.arguments as? Map<String, Any?>
+                    if (arguments == null) {
+                        result.error("INVALID_ARGS", "Exchange data cannot be null", null)
+                        return@setMethodCallHandler
+                    }
+
+                    if (selectedDevice == "WPOS_3") {
+                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
+                        wp.printExchangeReceipt(arguments) { success, errorMsg ->
+                            runOnUiThread {
+                                if (success) result.success(true)
+                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
+                            }
+                        }
+                    } else {
+                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
+                        np.printExchangeReceipt(arguments) { success, errorMsg ->
+                            runOnUiThread {
+                                if (success) {
+                                    result.success(true)
+                                } else {
+                                    wpos3Printer?.printExchangeReceipt(arguments) { wSuccess, wMsg ->
+                                        runOnUiThread {
+                                            if (wSuccess) result.success(true)
+                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
+                                        }
+                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                "printReturnReceipt" -> {
+                    val arguments = call.arguments as? Map<String, Any?>
+                    if (arguments == null) {
+                        result.error("INVALID_ARGS", "Return data cannot be null", null)
+                        return@setMethodCallHandler
+                    }
+
+                    if (selectedDevice == "WPOS_3") {
+                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
+                        wp.printReturnReceipt(arguments) { success, errorMsg ->
+                            runOnUiThread {
+                                if (success) result.success(true)
+                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
+                            }
+                        }
+                    } else {
+                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
+                        np.printReturnReceipt(arguments) { success, errorMsg ->
+                            runOnUiThread {
+                                if (success) {
+                                    result.success(true)
+                                } else {
+                                    wpos3Printer?.printReturnReceipt(arguments) { wSuccess, wMsg ->
+                                        runOnUiThread {
+                                            if (wSuccess) result.success(true)
+                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
+                                        }
+                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }

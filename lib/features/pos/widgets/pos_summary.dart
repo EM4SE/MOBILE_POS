@@ -106,6 +106,27 @@ class PosSummary extends StatelessWidget {
                               ),
                             ),
                           ],
+                          if (controller.appliedExchangeVoucher != null) ...[
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Exchange (${controller.appliedExchangeVoucher!.voucherCode}): -${CurrencyFormatter.formatWithSymbol(controller.exchangeVoucherCredit)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFFEA580C),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                InkWell(
+                                  onTap: () => controller.removeAppliedExchangeVoucher(),
+                                  child: const Icon(Icons.cancel, size: 14, color: Color(0xFFEA580C)),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

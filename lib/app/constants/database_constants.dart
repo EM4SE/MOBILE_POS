@@ -14,6 +14,15 @@ class DatabaseConstants {
   static const String tableSettings = 'settings';
   static const String tableBusinessDays = 'business_days';
   static const String tableShifts = 'shifts';
+  static const String tableExchangeVouchers = 'exchange_vouchers';
+
+  // Exchange Vouchers Columns
+  static const String colVoucherCode = 'voucher_code';
+  static const String colTotalAmount = 'total_amount';
+  static const String colRemainingAmount = 'remaining_amount';
+  static const String colItemsJson = 'items_json';
+  static const String colRedeemedInvoiceNo = 'redeemed_invoice_no';
+  static const String colRedeemedAt = 'redeemed_at';
 
   // Common Columns
   static const String colId = 'id';

@@ -134,6 +134,24 @@ class DatabaseMigrations {
       )
     ''');
 
+    // 9. Exchange Vouchers table
+    await db.execute('''
+      CREATE TABLE ${DatabaseConstants.tableExchangeVouchers} (
+        ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+        ${DatabaseConstants.colVoucherCode} TEXT NOT NULL UNIQUE,
+        ${DatabaseConstants.colCustomerId} INTEGER,
+        ${DatabaseConstants.colCustomerName} TEXT,
+        ${DatabaseConstants.colTotalAmount} REAL NOT NULL,
+        ${DatabaseConstants.colRemainingAmount} REAL NOT NULL,
+        ${DatabaseConstants.colItemsJson} TEXT NOT NULL,
+        ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'ACTIVE',
+        ${DatabaseConstants.colRedeemedInvoiceNo} TEXT,
+        ${DatabaseConstants.colCashierName} TEXT NOT NULL,
+        ${DatabaseConstants.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseConstants.colRedeemedAt} TEXT
+      )
+    ''');
+
     // Indices for optimal POS query performance on older hardware
     await db.execute('CREATE INDEX idx_products_code ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colCode});');
     await db.execute('CREATE INDEX idx_products_barcode ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colBarcode});');
@@ -144,6 +162,7 @@ class DatabaseMigrations {
     await db.execute('CREATE INDEX idx_sale_items_sale_id ON ${DatabaseConstants.tableSaleItems} (${DatabaseConstants.colSaleId});');
     await db.execute('CREATE INDEX idx_business_days_status ON ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colStatus});');
     await db.execute('CREATE INDEX idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
+    await db.execute('CREATE INDEX idx_exchange_voucher_code ON ${DatabaseConstants.tableExchangeVouchers} (${DatabaseConstants.colVoucherCode});');
 
     // Seed Initial Data
     await _seedInitialData(db);
@@ -171,24 +190,29 @@ class DatabaseMigrations {
       DatabaseConstants.colCreatedAt: now,
     });
 
-    // 2. Seed Default Walk-in Customer
-    await db.insert(DatabaseConstants.tableCustomers, {
-      DatabaseConstants.colName: 'Walk-in Customer',
-      DatabaseConstants.colPhone: '0770000000',
-      DatabaseConstants.colEmail: 'walkin@pos.local',
-      DatabaseConstants.colAddress: 'Store Counter',
-      DatabaseConstants.colCreatedAt: now,
-      DatabaseConstants.colUpdatedAt: now,
-    });
+    // 2. Seed Default Customers (Excluding Walk-in which is default unassigned state)
+    final sampleCustomers = [
+      {'name': 'Hotel Royal Blue', 'phone': '0112345678', 'email': 'accounts@royalblue.lk', 'address': 'Colombo 03'},
+      {'name': 'Kasun Perera', 'phone': '0771234567', 'email': 'kasun.p@gmail.com', 'address': 'No 45, Kandy Road, Kiribathgoda'},
+      {'name': 'Dilshan Fernando', 'phone': '0719876543', 'email': 'dilshan.f@yahoo.com', 'address': '128 Main Street, Negombo'},
+      {'name': 'Apex Enterprises Ltd', 'phone': '0115554321', 'email': 'info@apexpos.lk', 'address': 'Galle Road, Colombo 04'},
+      {'name': 'Nadeeka Silva', 'phone': '0783344556', 'email': 'nadeeka.silva@outlook.com', 'address': '88 High Level Road, Nugegoda'},
+      {'name': 'Maliban Distributors', 'phone': '0117788990', 'email': 'orders@maliban-dist.lk', 'address': 'Station Road, Ratmalana'},
+      {'name': 'Sunimal Jayawardena', 'phone': '0752233445', 'email': 'sunimal.j@gmail.com', 'address': '24 Lake View, Kurunegala'},
+      {'name': 'Ocean View Restaurant', 'phone': '0912233445', 'email': 'oceanview.galle@gmail.com', 'address': 'Rampart Street, Galle Fort'},
+      {'name': 'Chathura Bandara', 'phone': '0768899001', 'email': 'chathura.b@gmail.com', 'address': 'Yakkala Road, Gampaha'},
+    ];
 
-    await db.insert(DatabaseConstants.tableCustomers, {
-      DatabaseConstants.colName: 'Hotel Royal Blue',
-      DatabaseConstants.colPhone: '0112345678',
-      DatabaseConstants.colEmail: 'accounts@royalblue.lk',
-      DatabaseConstants.colAddress: 'Colombo 03',
-      DatabaseConstants.colCreatedAt: now,
-      DatabaseConstants.colUpdatedAt: now,
-    });
+    for (final c in sampleCustomers) {
+      await db.insert(DatabaseConstants.tableCustomers, {
+        DatabaseConstants.colName: c['name'],
+        DatabaseConstants.colPhone: c['phone'],
+        DatabaseConstants.colEmail: c['email'],
+        DatabaseConstants.colAddress: c['address'],
+        DatabaseConstants.colCreatedAt: now,
+        DatabaseConstants.colUpdatedAt: now,
+      });
+    }
 
     // 3. Seed Standard POS Products for rapid testing & live use
     final sampleProducts = [
@@ -200,7 +224,26 @@ class DatabaseMigrations {
       {'code': 'P106', 'barcode': '890103006', 'desc': 'Crispy Chicken Burger', 'price': 1200.0, 'cost': 750.0},
       {'code': 'P107', 'barcode': '890103007', 'desc': 'Iced Caramel Macchiato', 'price': 650.0, 'cost': 320.0},
       {'code': 'P108', 'barcode': '890103008', 'desc': 'French Fries Large', 'price': 550.0, 'cost': 280.0},
-      {'code': 'P109', 'barcode': '4791034017015', 'desc': 'Munchee Lemonpuff', 'price': 180.0, 'cost': 140.0},
+      {'code': 'P109', 'barcode': '4791034017015', 'desc': 'Munchee Lemonpuff 200g', 'price': 180.0, 'cost': 140.0},
+      {'code': 'P110', 'barcode': '890103010', 'desc': 'Red Bull Energy Drink 250ml', 'price': 650.0, 'cost': 450.0},
+      {'code': 'P111', 'barcode': '890103011', 'desc': 'Sprite 400ml Bottle', 'price': 250.0, 'cost': 180.0},
+      {'code': 'P112', 'barcode': '890103012', 'desc': 'Fresh Orange Juice 350ml', 'price': 480.0, 'cost': 250.0},
+      {'code': 'P113', 'barcode': '890103013', 'desc': 'Iced Coffee Milk Blend', 'price': 420.0, 'cost': 220.0},
+      {'code': 'P114', 'barcode': '890103014', 'desc': 'Hot Cappuccino Cup', 'price': 520.0, 'cost': 260.0},
+      {'code': 'P115', 'barcode': '890103015', 'desc': 'Beef Cheese Burger', 'price': 1350.0, 'cost': 850.0},
+      {'code': 'P116', 'barcode': '890103016', 'desc': 'Spicy Chicken Submarine', 'price': 1100.0, 'cost': 680.0},
+      {'code': 'P117', 'barcode': '890103017', 'desc': 'Chicken Kottu Rotti Full', 'price': 980.0, 'cost': 580.0},
+      {'code': 'P118', 'barcode': '890103018', 'desc': 'Veggie Cheese Pizza Slice', 'price': 620.0, 'cost': 350.0},
+      {'code': 'P119', 'barcode': '890103019', 'desc': 'Fried Chicken Rice Large', 'price': 920.0, 'cost': 550.0},
+      {'code': 'P120', 'barcode': '890103020', 'desc': 'Chocolate Fudge Brownie', 'price': 380.0, 'cost': 190.0},
+      {'code': 'P121', 'barcode': '890103021', 'desc': 'Glazed Cinnamon Donut', 'price': 220.0, 'cost': 110.0},
+      {'code': 'P122', 'barcode': '890103022', 'desc': 'Spicy Fish Bun', 'price': 120.0, 'cost': 70.0},
+      {'code': 'P123', 'barcode': '890103023', 'desc': 'Chicken Sausage Roll', 'price': 150.0, 'cost': 85.0},
+      {'code': 'P124', 'barcode': '4791034017022', 'desc': 'Munchee Super Cream Cracker', 'price': 220.0, 'cost': 160.0},
+      {'code': 'P125', 'barcode': '890103025', 'desc': 'Anchor Pure Butter 200g', 'price': 890.0, 'cost': 720.0},
+      {'code': 'P126', 'barcode': '890103026', 'desc': 'Highland Fresh Milk 1L', 'price': 460.0, 'cost': 380.0},
+      {'code': 'P127', 'barcode': '890103027', 'desc': 'Watawala Ceylon Tea 200g', 'price': 380.0, 'cost': 290.0},
+      {'code': 'P128', 'barcode': '890103028', 'desc': 'Keells White Sugar 1kg', 'price': 310.0, 'cost': 260.0},
     ];
 
     for (final p in sampleProducts) {
@@ -237,9 +280,51 @@ class DatabaseMigrations {
     }
   }
 
-  /// Ensure essential demo / standard products exist in current database
+  /// Ensure essential demo / standard products & customers exist in current database
   static Future<void> ensureSampleProducts(Database db) async {
     final now = DateTime.now().toIso8601String();
+
+    // Clean up Walk-in Customer from customers table if it was previously inserted
+    await db.delete(
+      DatabaseConstants.tableCustomers,
+      where: '${DatabaseConstants.colPhone} = ? OR ${DatabaseConstants.colName} = ?',
+      whereArgs: ['0770000000', 'Walk-in Customer'],
+    );
+
+    // Ensure Customers
+    final sampleCustomers = [
+      {'name': 'Hotel Royal Blue', 'phone': '0112345678', 'email': 'accounts@royalblue.lk', 'address': 'Colombo 03'},
+      {'name': 'Kasun Perera', 'phone': '0771234567', 'email': 'kasun.p@gmail.com', 'address': 'No 45, Kandy Road, Kiribathgoda'},
+      {'name': 'Dilshan Fernando', 'phone': '0719876543', 'email': 'dilshan.f@yahoo.com', 'address': '128 Main Street, Negombo'},
+      {'name': 'Apex Enterprises Ltd', 'phone': '0115554321', 'email': 'info@apexpos.lk', 'address': 'Galle Road, Colombo 04'},
+      {'name': 'Nadeeka Silva', 'phone': '0783344556', 'email': 'nadeeka.silva@outlook.com', 'address': '88 High Level Road, Nugegoda'},
+      {'name': 'Maliban Distributors', 'phone': '0117788990', 'email': 'orders@maliban-dist.lk', 'address': 'Station Road, Ratmalana'},
+      {'name': 'Sunimal Jayawardena', 'phone': '0752233445', 'email': 'sunimal.j@gmail.com', 'address': '24 Lake View, Kurunegala'},
+      {'name': 'Ocean View Restaurant', 'phone': '0912233445', 'email': 'oceanview.galle@gmail.com', 'address': 'Rampart Street, Galle Fort'},
+      {'name': 'Chathura Bandara', 'phone': '0768899001', 'email': 'chathura.b@gmail.com', 'address': 'Yakkala Road, Gampaha'},
+    ];
+
+    for (final c in sampleCustomers) {
+      final existing = await db.query(
+        DatabaseConstants.tableCustomers,
+        where: '${DatabaseConstants.colPhone} = ? OR ${DatabaseConstants.colName} = ?',
+        whereArgs: [c['phone'], c['name']],
+        limit: 1,
+      );
+
+      if (existing.isEmpty) {
+        await db.insert(DatabaseConstants.tableCustomers, {
+          DatabaseConstants.colName: c['name'],
+          DatabaseConstants.colPhone: c['phone'],
+          DatabaseConstants.colEmail: c['email'],
+          DatabaseConstants.colAddress: c['address'],
+          DatabaseConstants.colCreatedAt: now,
+          DatabaseConstants.colUpdatedAt: now,
+        });
+      }
+    }
+
+    // Ensure Products
     final sampleProducts = [
       {'code': 'P101', 'barcode': '890103001', 'desc': 'Coca Cola 400ml', 'price': 250.0, 'cost': 180.0},
       {'code': 'P102', 'barcode': '890103002', 'desc': 'Special Lunch Buffet', 'price': 850.0, 'cost': 520.0},
@@ -249,7 +334,26 @@ class DatabaseMigrations {
       {'code': 'P106', 'barcode': '890103006', 'desc': 'Crispy Chicken Burger', 'price': 1200.0, 'cost': 750.0},
       {'code': 'P107', 'barcode': '890103007', 'desc': 'Iced Caramel Macchiato', 'price': 650.0, 'cost': 320.0},
       {'code': 'P108', 'barcode': '890103008', 'desc': 'French Fries Large', 'price': 550.0, 'cost': 280.0},
-      {'code': 'P109', 'barcode': '4791034017015', 'desc': 'Munchee Lemonpuff', 'price': 180.0, 'cost': 140.0},
+      {'code': 'P109', 'barcode': '4791034017015', 'desc': 'Munchee Lemonpuff 200g', 'price': 180.0, 'cost': 140.0},
+      {'code': 'P110', 'barcode': '890103010', 'desc': 'Red Bull Energy Drink 250ml', 'price': 650.0, 'cost': 450.0},
+      {'code': 'P111', 'barcode': '890103011', 'desc': 'Sprite 400ml Bottle', 'price': 250.0, 'cost': 180.0},
+      {'code': 'P112', 'barcode': '890103012', 'desc': 'Fresh Orange Juice 350ml', 'price': 480.0, 'cost': 250.0},
+      {'code': 'P113', 'barcode': '890103013', 'desc': 'Iced Coffee Milk Blend', 'price': 420.0, 'cost': 220.0},
+      {'code': 'P114', 'barcode': '890103014', 'desc': 'Hot Cappuccino Cup', 'price': 520.0, 'cost': 260.0},
+      {'code': 'P115', 'barcode': '890103015', 'desc': 'Beef Cheese Burger', 'price': 1350.0, 'cost': 850.0},
+      {'code': 'P116', 'barcode': '890103016', 'desc': 'Spicy Chicken Submarine', 'price': 1100.0, 'cost': 680.0},
+      {'code': 'P117', 'barcode': '890103017', 'desc': 'Chicken Kottu Rotti Full', 'price': 980.0, 'cost': 580.0},
+      {'code': 'P118', 'barcode': '890103018', 'desc': 'Veggie Cheese Pizza Slice', 'price': 620.0, 'cost': 350.0},
+      {'code': 'P119', 'barcode': '890103019', 'desc': 'Fried Chicken Rice Large', 'price': 920.0, 'cost': 550.0},
+      {'code': 'P120', 'barcode': '890103020', 'desc': 'Chocolate Fudge Brownie', 'price': 380.0, 'cost': 190.0},
+      {'code': 'P121', 'barcode': '890103021', 'desc': 'Glazed Cinnamon Donut', 'price': 220.0, 'cost': 110.0},
+      {'code': 'P122', 'barcode': '890103022', 'desc': 'Spicy Fish Bun', 'price': 120.0, 'cost': 70.0},
+      {'code': 'P123', 'barcode': '890103023', 'desc': 'Chicken Sausage Roll', 'price': 150.0, 'cost': 85.0},
+      {'code': 'P124', 'barcode': '4791034017022', 'desc': 'Munchee Super Cream Cracker', 'price': 220.0, 'cost': 160.0},
+      {'code': 'P125', 'barcode': '890103025', 'desc': 'Anchor Pure Butter 200g', 'price': 890.0, 'cost': 720.0},
+      {'code': 'P126', 'barcode': '890103026', 'desc': 'Highland Fresh Milk 1L', 'price': 460.0, 'cost': 380.0},
+      {'code': 'P127', 'barcode': '890103027', 'desc': 'Watawala Ceylon Tea 200g', 'price': 380.0, 'cost': 290.0},
+      {'code': 'P128', 'barcode': '890103028', 'desc': 'Keells White Sugar 1kg', 'price': 310.0, 'cost': 260.0},
     ];
 
     for (final p in sampleProducts) {
@@ -259,12 +363,12 @@ class DatabaseMigrations {
         VALUES (?, ?, ?, ?, ?, 1, ?, ?)
       ''', [p['code'], p['barcode'], p['desc'], p['price'], p['cost'], now, now]);
 
-      // If already exists by code/barcode, update to ensure barcode is accurate
+      // If already exists by code/barcode, update to ensure barcode and descriptions are accurate
       await db.rawUpdate('''
         UPDATE ${DatabaseConstants.tableProducts}
-        SET ${DatabaseConstants.colBarcode} = ?, ${DatabaseConstants.colDescription} = ?, ${DatabaseConstants.colPrice} = ?
+        SET ${DatabaseConstants.colBarcode} = ?, ${DatabaseConstants.colDescription} = ?, ${DatabaseConstants.colPrice} = ?, ${DatabaseConstants.colCost} = ?
         WHERE ${DatabaseConstants.colBarcode} = ? OR ${DatabaseConstants.colCode} = ?
-      ''', [p['barcode'], p['desc'], p['price'], p['barcode'], p['code']]);
+      ''', [p['barcode'], p['desc'], p['price'], p['cost'], p['barcode'], p['code']]);
     }
   }
 
@@ -316,8 +420,26 @@ class DatabaseMigrations {
         )
       ''');
 
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${DatabaseConstants.tableExchangeVouchers} (
+          ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${DatabaseConstants.colVoucherCode} TEXT NOT NULL UNIQUE,
+          ${DatabaseConstants.colCustomerId} INTEGER,
+          ${DatabaseConstants.colCustomerName} TEXT,
+          ${DatabaseConstants.colTotalAmount} REAL NOT NULL,
+          ${DatabaseConstants.colRemainingAmount} REAL NOT NULL,
+          ${DatabaseConstants.colItemsJson} TEXT NOT NULL,
+          ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'ACTIVE',
+          ${DatabaseConstants.colRedeemedInvoiceNo} TEXT,
+          ${DatabaseConstants.colCashierName} TEXT NOT NULL,
+          ${DatabaseConstants.colCreatedAt} TEXT NOT NULL,
+          ${DatabaseConstants.colRedeemedAt} TEXT
+        )
+      ''');
+
       await db.execute('CREATE INDEX IF NOT EXISTS idx_business_days_status ON ${DatabaseConstants.tableBusinessDays} (${DatabaseConstants.colStatus});');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_voucher_code ON ${DatabaseConstants.tableExchangeVouchers} (${DatabaseConstants.colVoucherCode});');
     } catch (_) {}
   }
 
