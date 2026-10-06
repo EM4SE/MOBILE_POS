@@ -4,7 +4,9 @@ import '../models/shift_model.dart';
 
 abstract class ShiftRepository {
   Future<BusinessDay?> getActiveDay();
+  Future<BusinessDay?> getLatestDay();
   Future<Shift?> getActiveShift();
+  Future<Shift?> getLatestShift();
   Future<({BusinessDay day, Shift shift})> startDayAndShift({
     required double openingBalance,
     required String cashierUsername,
@@ -17,6 +19,7 @@ abstract class ShiftRepository {
     required String cashierName,
   });
   Future<ShiftSummaryStats> getShiftStats(Shift shift);
+  Future<ShiftSummaryStats> getDayStats(BusinessDay day);
   Future<Shift> closeShift({
     required Shift shift,
     required double actualClosingCash,
@@ -37,7 +40,13 @@ class ShiftRepositoryImpl implements ShiftRepository {
   Future<BusinessDay?> getActiveDay() => _datasource.getActiveDay();
 
   @override
+  Future<BusinessDay?> getLatestDay() => _datasource.getLatestDay();
+
+  @override
   Future<Shift?> getActiveShift() => _datasource.getActiveShift();
+
+  @override
+  Future<Shift?> getLatestShift() => _datasource.getLatestShift();
 
   @override
   Future<({BusinessDay day, Shift shift})> startDayAndShift({
@@ -65,6 +74,9 @@ class ShiftRepositoryImpl implements ShiftRepository {
 
   @override
   Future<ShiftSummaryStats> getShiftStats(Shift shift) => _datasource.getShiftStats(shift);
+
+  @override
+  Future<ShiftSummaryStats> getDayStats(BusinessDay day) => _datasource.getDayStats(day);
 
   @override
   Future<Shift> closeShift({

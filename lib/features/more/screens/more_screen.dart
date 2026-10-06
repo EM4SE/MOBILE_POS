@@ -103,13 +103,13 @@ class MoreScreen extends StatelessWidget {
       );
 
       if (action == 'HOLD') {
-        await posController.holdCurrentBill();
+        final heldSale = await posController.holdCurrentBill(printReceipt: true);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Current bill held. Ready for new bill.'),
+            SnackBar(
+              content: Text('Bill held (${heldSale.invoiceNo}) & receipt printed. Ready for new bill.'),
               backgroundColor: AppColors.warning,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
           Navigator.of(context).pop();
@@ -442,7 +442,16 @@ class MoreScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).pushNamed(AppRoutes.cashMovement, arguments: false),
                   ),
 
-                  // 7. CUSTOMERS
+                  // 7. REPORTS (Item Wise, Total Sales, Z Reading, X Reading)
+                  _buildSquareTile(
+                    context: context,
+                    label: 'REPORTS',
+                    icon: Icons.analytics_outlined,
+                    color: const Color(0xFF4F46E5), // Indigo
+                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.reports),
+                  ),
+
+                  // 8. CUSTOMERS
                   _buildSquareTile(
                     context: context,
                     label: 'CUSTOMERS',

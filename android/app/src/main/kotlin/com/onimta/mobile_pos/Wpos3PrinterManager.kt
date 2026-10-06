@@ -1127,4 +1127,131 @@ class Wpos3PrinterManager(private val context: Context) {
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
     }
+
+    fun printHoldReceipt(
+        holdData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        Thread {
+            try {
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
+                }
+
+                val target = printerInstance ?: printerServiceBinder
+                if (target != null) {
+                    val targetClass = target.javaClass
+                    cacheMethods(targetClass)
+
+                    try {
+                        printInitMethod?.invoke(target)
+                        clearCacheMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    val bitmap = renderHoldBitmap(holdData)
+
+                    if (printPictureMethod != null) {
+                        try {
+                            val params = printPictureMethod!!.parameterTypes
+                            if (params.size == 1 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap)
+                            } else if (params.size == 2 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap, 1)
+                            }
+                        } catch (_: Throwable) {}
+                    }
+
+                    try {
+                        printPaperMethod?.invoke(target, 4)
+                        printFinishMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    onComplete(true, null)
+                } else {
+                    onComplete(false, "W-POS 3 printer service not connected")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error printing hold receipt on W-POS 3: ${e.message}", e)
+                onComplete(false, "W-POS 3 print error: ${e.message}")
+            }
+        }.start()
+    }
+
+    private fun renderHoldBitmap(holdData: Map<String, Any?>): Bitmap {
+        val width = 384
+        val estimatedHeight = 520
+        val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val paint = Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
+        var y = 35f
+
+        fun drawCenter(text: String, size: Float, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, width / 2f, y, paint)
+            y += size + 8f
+        }
+
+        fun drawDivider(dotted: Boolean = true) {
+            paint.textSize = 16f
+            paint.typeface = Typeface.MONOSPACE
+            paint.textAlign = Paint.Align.CENTER
+            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
+            canvas.drawText(line, width / 2f, y, paint)
+            y += 22f
+        }
+
+        fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(left, 14f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(right, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = holdData["appName"] as? String ?: "ONIMTA POS"
+        val holdNo = holdData["holdNo"] as? String ?: ""
+        val totalAmount = holdData["totalAmount"] as? String ?: "LKR 0.00"
+        val totalItems = holdData["totalItems"] as? String ?: "0 items"
+        val customerName = holdData["customerName"] as? String ?: "Walk-in Customer"
+        val cashierName = holdData["cashierName"] as? String ?: "Admin"
+        val dateTime = holdData["dateTime"] as? String ?: ""
+
+        drawCenter(appName, 26f, true)
+        drawCenter("*** HELD BILL RECEIPT ***", 22f, true)
+        drawDivider(false)
+
+        drawTwoCols("Hold Bill #:", holdNo, 22f, true)
+        drawTwoCols("Date:", dateTime, 18f, false)
+        drawTwoCols("Cashier:", cashierName, 18f, false)
+        if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
+            drawTwoCols("Customer:", customerName, 18f, false)
+        }
+        drawDivider(true)
+
+        drawTwoCols("Total Items:", totalItems, 20f, true)
+        drawTwoCols("HELD AMOUNT:", totalAmount, 24f, true)
+        drawDivider(false)
+
+        y += 10f
+        drawCenter("||| |||| | ||||| ||| || ||||", 20f, true)
+        drawCenter("* $holdNo *", 20f, true)
+        drawDivider(true)
+        drawCenter("Scan barcode at POS to recall bill.", 16f, false)
+        drawCenter("Note: Active cart must be empty to recall.", 16f, false)
+        drawDivider(false)
+        y += 20f
+
+        return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
+    }
 }

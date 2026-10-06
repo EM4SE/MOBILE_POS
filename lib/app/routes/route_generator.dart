@@ -4,6 +4,8 @@ import '../../core/services/shift_service.dart';
 import '../../data/models/customer_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/sale_model.dart';
+import '../../data/repositories/sales_repository.dart';
+import '../../data/repositories/shift_repository.dart';
 import '../../features/authentication/controllers/login_controller.dart';
 import '../../features/authentication/screens/login_screen.dart';
 import '../../features/customers/controllers/customer_controller.dart';
@@ -22,6 +24,11 @@ import '../../features/pos/screens/return_screen.dart';
 import '../../features/products/controllers/product_controller.dart';
 import '../../features/products/screens/product_form_screen.dart';
 import '../../features/products/screens/products_screen.dart';
+import '../../features/reports/screens/item_wise_sales_screen.dart';
+import '../../features/reports/screens/reports_menu_screen.dart';
+import '../../features/reports/screens/total_sales_screen.dart';
+import '../../features/reports/screens/x_reading_screen.dart';
+import '../../features/reports/screens/z_reading_screen.dart';
 import '../../features/settings/controllers/settings_controller.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/shift/screens/end_shift_screen.dart';
@@ -29,7 +36,7 @@ import '../../features/shift/screens/start_shift_screen.dart';
 import '../../features/splash/screens/splash_screen.dart';
 import 'app_routes.dart';
 
-/// Central RouteGenerator dispatching named routes with controller dependencies
+/// Central RouteGenerator dispatching named routes with controller & repository dependencies
 class RouteGenerator {
   final AuthenticationService authService;
   final ShiftService shiftService;
@@ -38,6 +45,8 @@ class RouteGenerator {
   final ProductController productController;
   final CustomerController customerController;
   final SettingsController settingsController;
+  final SalesRepository salesRepository;
+  final ShiftRepository shiftRepository;
 
   RouteGenerator({
     required this.authService,
@@ -47,6 +56,8 @@ class RouteGenerator {
     required this.productController,
     required this.customerController,
     required this.settingsController,
+    required this.salesRepository,
+    required this.shiftRepository,
   });
 
   Route<dynamic> generateRoute(RouteSettings settings) {
@@ -103,6 +114,50 @@ class RouteGenerator {
           MoreScreen(
             authService: authService,
             posController: posController,
+          ),
+          settings,
+        );
+
+      case AppRoutes.reports:
+        return _buildRoute(
+          const ReportsMenuScreen(),
+          settings,
+        );
+
+      case AppRoutes.reportItemWise:
+        return _buildRoute(
+          ItemWiseSalesScreen(
+            salesRepository: salesRepository,
+            authService: authService,
+          ),
+          settings,
+        );
+
+      case AppRoutes.reportTotalSales:
+        return _buildRoute(
+          TotalSalesScreen(
+            salesRepository: salesRepository,
+            authService: authService,
+          ),
+          settings,
+        );
+
+      case AppRoutes.reportXReading:
+        return _buildRoute(
+          XReadingScreen(
+            shiftRepository: shiftRepository,
+            shiftService: shiftService,
+            authService: authService,
+          ),
+          settings,
+        );
+
+      case AppRoutes.reportZReading:
+        return _buildRoute(
+          ZReadingScreen(
+            shiftRepository: shiftRepository,
+            shiftService: shiftService,
+            authService: authService,
           ),
           settings,
         );

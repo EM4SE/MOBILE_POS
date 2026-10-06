@@ -20,4 +20,9 @@ class AppRoutes {
   static const String returnItem = '/return';
   static const String startShift = '/start-shift';
   static const String endShift = '/end-shift';
+  static const String reports = '/reports';
+  static const String reportItemWise = '/reports/item-wise';
+  static const String reportTotalSales = '/reports/total-sales';
+  static const String reportXReading = '/reports/x-reading';
+  static const String reportZReading = '/reports/z-reading';
 }

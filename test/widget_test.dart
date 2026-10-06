@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_pos/core/services/authentication_service.dart';
 import 'package:mobile_pos/data/models/customer_model.dart';
 import 'package:mobile_pos/data/models/product_model.dart';
+import 'package:mobile_pos/data/models/reports_model.dart';
 import 'package:mobile_pos/data/models/sale_item_model.dart';
 import 'package:mobile_pos/data/models/sale_model.dart';
 import 'package:mobile_pos/data/models/user_model.dart';
@@ -84,9 +85,26 @@ class FakeSalesRepository implements SalesRepository {
   @override
   Future<int> deleteSale(int saleId) async => 1;
   @override
-  Future<String> generateNextInvoiceNumber() async => 'INV-20261004-0001';
+  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'}) async => '${prefix}20261004-0001';
   @override
   Future<double> getTodayTotalSales() async => 0.0;
+  @override
+  Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter}) async => [];
+  @override
+  Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter}) async => const TotalSalesReportData(
+    totalInvoices: 0,
+    grossSales: 0.0,
+    totalDiscount: 0.0,
+    totalTax: 0.0,
+    netSales: 0.0,
+    totalReturnsCount: 0,
+    totalReturnsAmount: 0.0,
+    totalNetRevenue: 0.0,
+    cashSales: 0.0,
+    cardSales: 0.0,
+    qrSales: 0.0,
+    creditSales: 0.0,
+  );
 }
 
 void main() {

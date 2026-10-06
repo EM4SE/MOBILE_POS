@@ -1,4 +1,5 @@
 import '../datasources/local/sales_local_datasource.dart';
+import '../models/reports_model.dart';
 import '../models/sale_item_model.dart';
 import '../models/sale_model.dart';
 
@@ -10,8 +11,10 @@ abstract class SalesRepository {
   Future<List<SaleItem>> getSaleItems(int saleId);
   Future<int> updateSaleStatus(int saleId, String status);
   Future<int> deleteSale(int saleId);
-  Future<String> generateNextInvoiceNumber();
+  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'});
   Future<double> getTodayTotalSales();
+  Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter});
+  Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter});
 }
 
 class SalesRepositoryImpl implements SalesRepository {
@@ -55,12 +58,22 @@ class SalesRepositoryImpl implements SalesRepository {
   }
 
   @override
-  Future<String> generateNextInvoiceNumber() {
-    return _localDataSource.generateNextInvoiceNumber();
+  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'}) {
+    return _localDataSource.generateNextInvoiceNumber(prefix: prefix);
   }
 
   @override
   Future<double> getTodayTotalSales() {
     return _localDataSource.getTodayTotalSales();
+  }
+
+  @override
+  Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter}) {
+    return _localDataSource.getItemWiseSalesReport(dateFilter: dateFilter);
+  }
+
+  @override
+  Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter}) {
+    return _localDataSource.getTotalSalesReport(dateFilter: dateFilter);
   }
 }

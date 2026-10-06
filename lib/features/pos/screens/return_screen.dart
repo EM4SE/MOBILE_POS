@@ -8,7 +8,7 @@ import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controllers/pos_controller.dart';
 
-/// Full Dedicated Screen for Item Returns & Refunds (No Credit)
+/// Clean, Responsive Full Dedicated Screen for Item Returns & Refunds (No Credit)
 class ReturnScreen extends StatefulWidget {
   final PosController controller;
 
@@ -90,303 +90,324 @@ class _ReturnScreenState extends State<ReturnScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Highlights Banner
-            Container(
-              color: const Color(0xFFFFF1F2),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE11D48).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
-                    ),
-                    child: const Icon(Icons.assignment_return, color: Color(0xFFE11D48), size: 28),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'PROCESS ITEM RETURN & REFUND',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF9F1239),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Returns cart items to inventory stock and issues immediate payment refund',
-                          style: TextStyle(fontSize: 11, color: Color(0xFFBE123C)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Divider(height: 1, color: Color(0xFFFECDD3)),
-
-            // Customer banner if assigned
-            if (customer != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: AppColors.surfaceSecondary,
-                child: Row(
-                  children: [
-                    const Icon(Icons.person, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Customer: ${customer.name}${customer.phone.isNotEmpty ? " (${customer.phone})" : ""}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Returned Items List Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'RETURNED ITEMS (${widget.controller.totalItemCount} TOTAL QTY)',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  Text(
-                    '${items.length} Line Items',
-                    style: const TextStyle(fontSize: 11, color: AppColors.textLight),
-                  ),
-                ],
-              ),
-            ),
-
-            // Returned Items List
+            // Scrollable Content Area (Prevents any overflow on small POS screens)
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
-                itemBuilder: (ctx, index) {
-                  final item = items[index];
-                  return Card(
-                    margin: EdgeInsets.zero,
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
-                      side: const BorderSide(color: AppColors.border),
-                    ),
-                    color: AppColors.surface,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Customer banner if assigned
+                    if (customer != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSecondary,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person, size: 18, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Customer: ${customer.name}${customer.phone.isNotEmpty ? " (${customer.phone})" : ""}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Returned Items Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '${index + 1}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: AppColors.textSecondary),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.productDescription,
-                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Qty: ${item.quantity.toInt()}  ×  ${CurrencyFormatter.formatWithSymbol(item.unitPrice)}',
-                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                ),
-                              ],
+                          Text(
+                            'RETURNED ITEMS (${widget.controller.totalItemCount} QTY)',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
                             ),
                           ),
                           Text(
-                            CurrencyFormatter.formatWithSymbol(item.lineTotal),
-                            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                            '${items.length} Line Items',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textLight),
                           ),
                         ],
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
+                    const SizedBox(height: 4),
 
-            // Refund Payment Method & Reason Selection Card
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                border: Border(
-                  top: BorderSide(color: AppColors.border, width: 1.2),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'SELECT REFUND PAYMENT METHOD (NO CREDIT):',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: _refundMethods.map((m) {
-                      final name = m['name'] as String;
-                      final icon = m['icon'] as IconData;
-                      final isSelected = _selectedMethod == name;
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                          child: InkWell(
-                            onTap: () {
-                              FeedbackHelper.vibrate();
-                              setState(() => _selectedMethod = name);
-                            },
-                            child: Container(
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFFE11D48) : Colors.white,
-                                borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
-                                border: Border.all(
-                                  color: isSelected ? const Color(0xFFE11D48) : AppColors.border,
-                                  width: isSelected ? 2 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(icon, size: 18, color: isSelected ? Colors.white : AppColors.textPrimary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    name,
-                                    style: TextStyle(
+                    // Returned Items List Box
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                        color: AppColors.surface,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+                        itemBuilder: (ctx, index) {
+                          final item = items[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
                                       fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                                      color: AppColors.textSecondary,
                                     ),
                                   ),
-                                ],
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.productDescription,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Qty: ${item.quantity.toInt()}  ×  ${CurrencyFormatter.formatWithSymbol(item.unitPrice)}',
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  CurrencyFormatter.formatWithSymbol(item.lineTotal),
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Refund Payment Method Selector
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'REFUND PAYMENT METHOD (NO CREDIT):',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: _refundMethods.map((m) {
+                              final name = m['name'] as String;
+                              final icon = m['icon'] as IconData;
+                              final isSelected = _selectedMethod == name;
+                              return Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                  child: InkWell(
+                                    onTap: () {
+                                      FeedbackHelper.vibrate();
+                                      setState(() => _selectedMethod = name);
+                                    },
+                                    child: Container(
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? const Color(0xFFE11D48) : AppColors.surfaceSecondary,
+                                        borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                                        border: Border.all(
+                                          color: isSelected ? const Color(0xFFE11D48) : AppColors.border,
+                                          width: isSelected ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            icon,
+                                            size: 16,
+                                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: isSelected ? Colors.white : AppColors.textPrimary,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Return Reason Dropdown
+                          Row(
+                            children: [
+                              const Text('Reason: ', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                              Expanded(
+                                child: Container(
+                                  height: 36,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    border: Border.all(color: AppColors.border),
+                                    borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedReason,
+                                      isExpanded: true,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      items: _reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                                      onChanged: (val) {
+                                        if (val != null) setState(() => _selectedReason = val);
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (_selectedReason == 'Other Reason') ...[
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              height: 34,
+                              child: TextField(
+                                controller: _customReasonController,
+                                style: const TextStyle(fontSize: 11.5),
+                                decoration: InputDecoration(
+                                  hintText: 'Specify return reason details...',
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Total Refund Amount Banner
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F2),
+                        border: Border.all(color: const Color(0xFFFECDD3), width: 1.5),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Flexible(
+                            child: Text(
+                              'TOTAL REFUND PAYABLE:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF9F1239),
+                                letterSpacing: 0.5,
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Return Reason selector
-                  Row(
-                    children: [
-                      const Text('Reason:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          height: 38,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: AppColors.border),
-                            borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedReason,
-                              isExpanded: true,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
-                              items: _reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                              onChanged: (val) {
-                                if (val != null) setState(() => _selectedReason = val);
-                              },
+                          const SizedBox(width: 8),
+                          Text(
+                            CurrencyFormatter.formatWithSymbol(totalAmount),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFE11D48),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  if (_selectedReason == 'Other Reason') ...[
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      height: 36,
-                      child: TextField(
-                        controller: _customReasonController,
-                        style: const TextStyle(fontSize: 12),
-                        decoration: InputDecoration(
-                          hintText: 'Specify return reason details...',
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusXs)),
-                        ),
+                        ],
                       ),
                     ),
                   ],
-                ],
-              ),
-            ),
-
-            // Total Refund Display
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF1F2),
-                border: Border(
-                  top: BorderSide(color: Color(0xFFFECDD3), width: 1.5),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'TOTAL REFUND PAYABLE:',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF9F1239)),
-                  ),
-                  Text(
-                    CurrencyFormatter.formatWithSymbol(totalAmount),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFE11D48),
-                    ),
-                  ),
-                ],
-              ),
             ),
 
-            // Fixed Bottom Action Buttons
+            // Fixed Bottom Action Bar
             Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.surface,
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
               child: Row(
                 children: [
                   Expanded(
                     flex: 1,
                     child: SizedBox(
-                      height: 48,
+                      height: 46,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -396,11 +417,11 @@ class _ReturnScreenState extends State<ReturnScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     flex: 2,
                     child: SizedBox(
-                      height: 48,
+                      height: 46,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE11D48),
@@ -411,14 +432,14 @@ class _ReturnScreenState extends State<ReturnScreen> {
                         onPressed: _isProcessing ? null : _handleConfirm,
                         icon: _isProcessing
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 18,
+                                height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Icon(Icons.print, size: 20),
+                            : const Icon(Icons.print, size: 18),
                         label: Text(
-                          _isProcessing ? 'PROCESSING REFUND...' : 'REFUND & PRINT RECEIPT',
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, letterSpacing: 0.5),
+                          _isProcessing ? 'PROCESSING...' : 'REFUND & PRINT RECEIPT',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
                         ),
                       ),
                     ),

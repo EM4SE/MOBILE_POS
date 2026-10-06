@@ -8,6 +8,8 @@ class PrinterResult {
   final bool success;
   final String? message;
 
+  String? get errorMessage => message;
+
   const PrinterResult(this.success, [this.message]);
 }
 
@@ -264,4 +266,125 @@ class PrinterService {
       return PrinterResult(false, e.toString());
     }
   }
+
+  /// Print Item Wise Sales Report
+  static Future<PrinterResult> printItemWiseSalesReport({
+    required String title,
+    required String period,
+    required String cashierName,
+    required double totalQuantity,
+    required double totalRevenue,
+    required List<Map<String, dynamic>> items,
+    String? dateTime,
+  }) async {
+    try {
+      final itemsPayload = items.map((item) {
+        final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
+        final total = (item['totalAmount'] as num?)?.toDouble() ?? 0.0;
+        return {
+          'description': (item['description'] ?? 'Item').toString(),
+          'qty': CurrencyFormatter.formatQuantity(qty),
+          'total': CurrencyFormatter.formatWithSymbol(total),
+        };
+      }).toList();
+
+      final payload = {
+        'appName': AppConstants.appName,
+        'title': title,
+        'period': period,
+        'cashierName': cashierName,
+        'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
+        'totalQuantity': CurrencyFormatter.formatQuantity(totalQuantity),
+        'totalRevenue': CurrencyFormatter.formatWithSymbol(totalRevenue),
+        'items': itemsPayload,
+      };
+
+      final bool result = await _channel.invokeMethod('printItemWiseSalesReport', payload);
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
+
+  /// Print Total Financial Sales Report
+  static Future<PrinterResult> printTotalSalesReport({
+    required String title,
+    required String period,
+    required String cashierName,
+    required int totalInvoices,
+    required double grossSales,
+    required double discount,
+    required double tax,
+    required double netSales,
+    required int returnsCount,
+    required double returnsAmount,
+    required double totalNetRevenue,
+    required double cashSales,
+    required double cardSales,
+    required double qrSales,
+    required double creditSales,
+    String? dateTime,
+  }) async {
+    try {
+      final payload = {
+        'appName': AppConstants.appName,
+        'title': title,
+        'period': period,
+        'cashierName': cashierName,
+        'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
+        'totalInvoices': '$totalInvoices',
+        'grossSales': CurrencyFormatter.formatWithSymbol(grossSales),
+        'discount': CurrencyFormatter.formatWithSymbol(discount),
+        'tax': CurrencyFormatter.formatWithSymbol(tax),
+        'netSales': CurrencyFormatter.formatWithSymbol(netSales),
+        'returnsCount': '$returnsCount',
+        'returnsAmount': CurrencyFormatter.formatWithSymbol(returnsAmount),
+        'totalNetRevenue': CurrencyFormatter.formatWithSymbol(totalNetRevenue),
+        'cashSales': CurrencyFormatter.formatWithSymbol(cashSales),
+        'cardSales': CurrencyFormatter.formatWithSymbol(cardSales),
+        'qrSales': CurrencyFormatter.formatWithSymbol(qrSales),
+        'creditSales': CurrencyFormatter.formatWithSymbol(creditSales),
+      };
+
+      final bool result = await _channel.invokeMethod('printTotalSalesReport', payload);
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
+
+  /// Print Held Bill Receipt with Barcode (without item list)
+  static Future<PrinterResult> printHoldReceipt({
+    required String holdNo,
+    required double totalAmount,
+    required int totalItemsCount,
+    required double totalQuantity,
+    String? customerName,
+    String? cashierName,
+    String? dateTime,
+  }) async {
+    try {
+      final payload = {
+        'appName': AppConstants.appName,
+        'holdNo': holdNo,
+        'totalAmount': CurrencyFormatter.formatWithSymbol(totalAmount),
+        'totalItems': '$totalItemsCount lines (${CurrencyFormatter.formatQuantity(totalQuantity)} items)',
+        'customerName': customerName ?? 'Walk-in Customer',
+        'cashierName': cashierName ?? 'Admin',
+        'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
+      };
+
+      final bool result = await _channel.invokeMethod('printHoldReceipt', payload);
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
 }
+

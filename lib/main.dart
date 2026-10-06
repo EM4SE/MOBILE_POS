@@ -91,6 +91,8 @@ void main() async {
     productController: productController,
     customerController: customerController,
     settingsController: settingsController,
+    salesRepository: salesRepository,
+    shiftRepository: shiftRepository,
   );
 
   runApp(PosApp(routeGenerator: routeGenerator));

@@ -41,19 +41,35 @@ class _PosScreenState extends State<PosScreen> {
 
   Future<void> _handleBarcodeSubmit(String code) async {
     if (code.trim().isEmpty) return;
-    final added = await widget.controller.quickAddByCodeOrBarcode(code);
-    if (!mounted) return;
-    if (added) {
-      _barcodeInputController.clear();
-      if (widget.controller.appliedExchangeVoucher != null &&
-          widget.controller.appliedExchangeVoucher!.voucherCode == code.trim().toUpperCase()) {
-        AppDialog.showSnackBar(
-          context,
-          'Exchange voucher applied: ${CurrencyFormatter.formatWithSymbol(widget.controller.exchangeVoucherCredit)} credit deduction',
-        );
+    try {
+      final clean = code.trim().toUpperCase();
+      final added = await widget.controller.quickAddByCodeOrBarcode(code);
+      if (!mounted) return;
+      if (added) {
+        _barcodeInputController.clear();
+        if (widget.controller.appliedExchangeVoucher != null &&
+            widget.controller.appliedExchangeVoucher!.voucherCode == clean) {
+          AppDialog.showSnackBar(
+            context,
+            'Exchange voucher applied: ${CurrencyFormatter.formatWithSymbol(widget.controller.exchangeVoucherCredit)} credit deduction',
+          );
+        } else if (widget.controller.lastRecalledBillNo != null &&
+            widget.controller.lastRecalledBillNo!.trim().toUpperCase() == clean) {
+          AppDialog.showSnackBar(
+            context,
+            'Recalled held bill: ${widget.controller.lastRecalledBillNo} (${widget.controller.cartItems.length} items)',
+          );
+        }
+      } else {
+        AppDialog.showSnackBar(context, 'No product, voucher or held bill matches: $code', isError: true);
       }
-    } else {
-      AppDialog.showSnackBar(context, 'No product or active voucher matches: $code', isError: true);
+    } catch (e) {
+      if (!mounted) return;
+      AppDialog.showSnackBar(
+        context,
+        e.toString().replaceAll('PosOperationException: ', '').replaceAll('Exception: ', ''),
+        isError: true,
+      );
     }
   }
 

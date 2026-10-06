@@ -889,4 +889,411 @@ class NexgoPrinterManager(private val context: Context) {
             onComplete(false, e.message ?: "Unknown printer error")
         }
     }
+
+    fun printItemWiseSalesReport(
+        reportData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        if (!isPrinterReady()) {
+            onComplete(false, "NEXGO thermal printer not initialized")
+            return
+        }
+
+        try {
+            val p = printer ?: return onComplete(false, "Printer instance null")
+            val pClass = p.javaClass
+
+            pClass.getMethod("initPrinter").invoke(p)
+            try {
+                pClass.getMethod("setLetterSpacing", Int::class.javaPrimitiveType).invoke(p, 0)
+            } catch (_: Exception) {}
+
+            val alignLeft = getAlignEnum("LEFT")
+            val alignCenter = getAlignEnum("CENTER")
+
+            val appendTextMethod = pClass.getMethod(
+                "appendPrnStr",
+                String::class.java,
+                Int::class.javaPrimitiveType,
+                alignEnumClass,
+                Boolean::class.javaPrimitiveType
+            )
+
+            val appendTwoColsMethod = try {
+                pClass.getMethod(
+                    "appendPrnStr",
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Boolean::class.javaPrimitiveType
+                )
+            } catch (_: Exception) {
+                null
+            }
+
+            fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
+            }
+
+            fun printTwoCols(left: String, right: String, size: Int = 22, bold: Boolean = false) {
+                if (appendTwoColsMethod != null) {
+                    appendTwoColsMethod.invoke(p, left, right, size, bold)
+                } else {
+                    val totalWidth = 32
+                    val pad = (totalWidth - left.length - right.length).coerceAtLeast(1)
+                    val line = left + " ".repeat(pad) + right
+                    printLine(line, size, alignLeft, bold)
+                }
+            }
+
+            val appName = reportData["appName"] as? String ?: "ONIMTA POS"
+            val title = reportData["title"] as? String ?: "ITEM WISE SALES"
+            val period = reportData["period"] as? String ?: "Today"
+            val cashier = reportData["cashierName"] as? String ?: "Admin"
+            val dateTime = reportData["dateTime"] as? String ?: ""
+            val totalQty = reportData["totalQuantity"] as? String ?: "0"
+            val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
+            val items = reportData["items"] as? List<Map<String, Any?>> ?: emptyList()
+
+            printLine(appName, 28, alignCenter, true)
+            printLine(title, 22, alignCenter, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printTwoCols("Period:", period, 20, false)
+            printTwoCols("Cashier:", cashier, 20, false)
+            if (dateTime.isNotEmpty()) {
+                printTwoCols("Date:", dateTime, 20, false)
+            }
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printLine("ITEM DESCRIPTION", 20, alignLeft, true)
+            printTwoCols("  SOLD QTY", "TOTAL AMOUNT", 20, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            var rank = 1
+            for (item in items) {
+                val desc = item["description"] as? String ?: ""
+                val qty = item["qty"] as? String ?: "0"
+                val total = item["total"] as? String ?: "LKR 0.00"
+                printLine("$rank. $desc", 22, alignLeft, true)
+                printTwoCols("   Qty: $qty", total, 20, false)
+                rank++
+            }
+
+            printLine("--------------------------------", 20, alignCenter, false)
+            printTwoCols("TOTAL ITEMS SOLD:", totalQty, 22, true)
+            printTwoCols("TOTAL REVENUE:", totalRevenue, 26, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            try {
+                pClass.getMethod("feedPaper", Int::class.javaPrimitiveType).invoke(p, 4)
+            } catch (_: Exception) {}
+
+            if (onPrintListenerClass != null) {
+                val listenerProxy = Proxy.newProxyInstance(
+                    onPrintListenerClass!!.classLoader,
+                    arrayOf(onPrintListenerClass)
+                ) { _, method, args ->
+                    if (method.name == "onPrintResult") {
+                        val resultCode = args?.getOrNull(0) as? Int ?: 0
+                        if (resultCode == 0) onComplete(true, null)
+                        else onComplete(false, "Print failed: $resultCode")
+                    }
+                    null
+                }
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, true, listenerProxy)
+            } else {
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, false, null)
+                onComplete(true, null)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error printing item wise sales report: ${e.message}", e)
+            onComplete(false, e.message ?: "Unknown printer error")
+        }
+    }
+
+    fun printTotalSalesReport(
+        reportData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        if (!isPrinterReady()) {
+            onComplete(false, "NEXGO thermal printer not initialized")
+            return
+        }
+
+        try {
+            val p = printer ?: return onComplete(false, "Printer instance null")
+            val pClass = p.javaClass
+
+            pClass.getMethod("initPrinter").invoke(p)
+            try {
+                pClass.getMethod("setLetterSpacing", Int::class.javaPrimitiveType).invoke(p, 0)
+            } catch (_: Exception) {}
+
+            val alignLeft = getAlignEnum("LEFT")
+            val alignCenter = getAlignEnum("CENTER")
+
+            val appendTextMethod = pClass.getMethod(
+                "appendPrnStr",
+                String::class.java,
+                Int::class.javaPrimitiveType,
+                alignEnumClass,
+                Boolean::class.javaPrimitiveType
+            )
+
+            val appendTwoColsMethod = try {
+                pClass.getMethod(
+                    "appendPrnStr",
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Boolean::class.javaPrimitiveType
+                )
+            } catch (_: Exception) {
+                null
+            }
+
+            fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
+            }
+
+            fun printTwoCols(left: String, right: String, size: Int = 22, bold: Boolean = false) {
+                if (appendTwoColsMethod != null) {
+                    appendTwoColsMethod.invoke(p, left, right, size, bold)
+                } else {
+                    val totalWidth = 32
+                    val pad = (totalWidth - left.length - right.length).coerceAtLeast(1)
+                    val line = left + " ".repeat(pad) + right
+                    printLine(line, size, alignLeft, bold)
+                }
+            }
+
+            val appName = reportData["appName"] as? String ?: "ONIMTA POS"
+            val title = reportData["title"] as? String ?: "TOTAL SALES REPORT"
+            val period = reportData["period"] as? String ?: "Today"
+            val cashier = reportData["cashierName"] as? String ?: "Admin"
+            val dateTime = reportData["dateTime"] as? String ?: ""
+
+            val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
+            val grossSales = reportData["grossSales"] as? String ?: "LKR 0.00"
+            val discount = reportData["discount"] as? String ?: "LKR 0.00"
+            val tax = reportData["tax"] as? String ?: "LKR 0.00"
+            val netSales = reportData["netSales"] as? String ?: "LKR 0.00"
+
+            val returnsCount = reportData["returnsCount"] as? String ?: "0"
+            val returnsAmount = reportData["returnsAmount"] as? String ?: "LKR 0.00"
+            val totalNetRevenue = reportData["totalNetRevenue"] as? String ?: "LKR 0.00"
+
+            val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+            val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
+            val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
+            val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
+
+            printLine(appName, 28, alignCenter, true)
+            printLine(title, 22, alignCenter, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printTwoCols("Period:", period, 20, false)
+            printTwoCols("Cashier:", cashier, 20, false)
+            if (dateTime.isNotEmpty()) {
+                printTwoCols("Date:", dateTime, 20, false)
+            }
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printLine("SALES SUMMARY", 20, alignLeft, true)
+            printTwoCols("Total Invoices:", totalInvoices, 20, false)
+            printTwoCols("Gross Sales:", grossSales, 20, false)
+            if (discount.isNotEmpty() && discount != "LKR 0.00") {
+                printTwoCols("Discounts:", "-$discount", 20, false)
+            }
+            if (tax.isNotEmpty() && tax != "LKR 0.00") {
+                printTwoCols("Tax:", tax, 20, false)
+            }
+            printTwoCols("Net Sales:", netSales, 22, true)
+            if (returnsCount != "0") {
+                printTwoCols("Returns ($returnsCount bills):", "-$returnsAmount", 20, false)
+            }
+            printLine("--------------------------------", 20, alignCenter, false)
+            printTwoCols("TOTAL NET REVENUE:", totalNetRevenue, 26, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printLine("PAYMENTS / TENDER BREAKDOWN", 20, alignLeft, true)
+            printTwoCols("Cash Sales:", cashSales, 20, false)
+            printTwoCols("Card Sales:", cardSales, 20, false)
+            if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
+                printTwoCols("QR / Online:", qrSales, 20, false)
+            }
+            if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
+                printTwoCols("Credit Sales:", creditSales, 20, false)
+            }
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            try {
+                pClass.getMethod("feedPaper", Int::class.javaPrimitiveType).invoke(p, 4)
+            } catch (_: Exception) {}
+
+            if (onPrintListenerClass != null) {
+                val listenerProxy = Proxy.newProxyInstance(
+                    onPrintListenerClass!!.classLoader,
+                    arrayOf(onPrintListenerClass)
+                ) { _, method, args ->
+                    if (method.name == "onPrintResult") {
+                        val resultCode = args?.getOrNull(0) as? Int ?: 0
+                        if (resultCode == 0) onComplete(true, null)
+                        else onComplete(false, "Print failed: $resultCode")
+                    }
+                    null
+                }
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, true, listenerProxy)
+            } else {
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, false, null)
+                onComplete(true, null)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error printing total sales report: ${e.message}", e)
+            onComplete(false, e.message ?: "Unknown printer error")
+        }
+    }
+
+    fun printHoldReceipt(
+        holdData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        if (!isPrinterReady()) {
+            onComplete(false, "NEXGO thermal printer not initialized")
+            return
+        }
+
+        try {
+            val p = printer ?: return onComplete(false, "Printer instance null")
+            val pClass = p.javaClass
+
+            pClass.getMethod("initPrinter").invoke(p)
+            try {
+                pClass.getMethod("setLetterSpacing", Int::class.javaPrimitiveType).invoke(p, 0)
+            } catch (_: Exception) {}
+
+            val alignLeft = getAlignEnum("LEFT")
+            val alignCenter = getAlignEnum("CENTER")
+            val alignRight = getAlignEnum("RIGHT")
+
+            val appendTextMethod = pClass.getMethod(
+                "appendPrnStr",
+                String::class.java,
+                Int::class.javaPrimitiveType,
+                alignEnumClass,
+                Boolean::class.javaPrimitiveType
+            )
+
+            val appendTwoColsMethod = try {
+                pClass.getMethod(
+                    "appendPrnStr",
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Boolean::class.javaPrimitiveType
+                )
+            } catch (_: Exception) {
+                null
+            }
+
+            fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
+            }
+
+            fun printTwoCols(left: String, right: String, size: Int = 22, bold: Boolean = false) {
+                if (appendTwoColsMethod != null) {
+                    appendTwoColsMethod.invoke(p, left, right, size, bold)
+                } else {
+                    val totalWidth = 32
+                    val pad = (totalWidth - left.length - right.length).coerceAtLeast(1)
+                    val line = left + " ".repeat(pad) + right
+                    printLine(line, size, alignLeft, bold)
+                }
+            }
+
+            val appName = holdData["appName"] as? String ?: "ONIMTA POS"
+            val holdNo = holdData["holdNo"] as? String ?: ""
+            val totalAmount = holdData["totalAmount"] as? String ?: "LKR 0.00"
+            val totalItems = holdData["totalItems"] as? String ?: "0 items"
+            val customerName = holdData["customerName"] as? String ?: "Walk-in Customer"
+            val cashierName = holdData["cashierName"] as? String ?: "Admin"
+            val dateTime = holdData["dateTime"] as? String ?: ""
+
+            printLine(appName, 28, alignCenter, true)
+            printLine("*** HELD BILL RECEIPT ***", 24, alignCenter, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printTwoCols("Hold Bill #:", holdNo, 24, true)
+            printTwoCols("Date:", dateTime, 20, false)
+            printTwoCols("Cashier:", cashierName, 20, false)
+            if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
+                printTwoCols("Customer:", customerName, 20, false)
+            }
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            printTwoCols("Total Items:", totalItems, 22, true)
+            printTwoCols("HELD AMOUNT:", totalAmount, 26, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            // Try printing barcode natively if supported
+            var barcodePrinted = false
+            try {
+                val appendBarcodeMethod = pClass.methods.firstOrNull { it.name == "appendBarcode" }
+                if (appendBarcodeMethod != null) {
+                    val params = appendBarcodeMethod.parameterTypes
+                    if (params.size >= 2 && params[0] == String::class.java) {
+                        if (params.size == 2) {
+                            appendBarcodeMethod.invoke(p, holdNo, 60)
+                            barcodePrinted = true
+                        } else if (params.size >= 5) {
+                            val formatEnum = pClass.classLoader?.loadClass("com.nexgo.oaf.apiv3.device.printer.BarcodeFormatEnum")
+                                ?.let { cls -> java.lang.Enum.valueOf(cls as Class<out Enum<*>>, "CODE_128") }
+                            appendBarcodeMethod.invoke(p, holdNo, 300, 60, 0, alignCenter, formatEnum)
+                            barcodePrinted = true
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
+            printLine("||| |||| | ||||| ||| || ||||", 20, alignCenter, true)
+            printLine("* $holdNo *", 22, alignCenter, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+            printLine("Scan barcode at POS to recall bill.", 18, alignCenter, false)
+            printLine("Note: Active cart must be empty to recall.", 18, alignCenter, false)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            try {
+                pClass.getMethod("feedPaper", Int::class.javaPrimitiveType).invoke(p, 4)
+            } catch (_: Exception) {}
+
+            if (onPrintListenerClass != null) {
+                val listenerProxy = Proxy.newProxyInstance(
+                    onPrintListenerClass!!.classLoader,
+                    arrayOf(onPrintListenerClass)
+                ) { _, method, args ->
+                    if (method.name == "onPrintResult") {
+                        val resultCode = args?.getOrNull(0) as? Int ?: 0
+                        if (resultCode == 0) onComplete(true, null)
+                        else onComplete(false, "Print failed: $resultCode")
+                    }
+                    null
+                }
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, true, listenerProxy)
+            } else {
+                pClass.getMethod("startPrint", Boolean::class.javaPrimitiveType, onPrintListenerClass)
+                    .invoke(p, false, null)
+                onComplete(true, null)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error printing hold receipt: ${e.message}", e)
+            onComplete(false, e.message ?: "Unknown printer error")
+        }
+    }
 }
+

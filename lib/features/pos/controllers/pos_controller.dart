@@ -33,6 +33,7 @@ class PosController extends ChangeNotifier {
   int? _editingIndex;
   bool _isLoading = false;
   String? _errorMessage;
+  String? _lastRecalledBillNo;
 
   // Active Applied Exchange Voucher Credit for Current Cart
   ExchangeVoucher? _appliedExchangeVoucher;
@@ -128,6 +129,7 @@ class PosController extends ChangeNotifier {
   int? get editingIndex => _editingIndex;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  String? get lastRecalledBillNo => _lastRecalledBillNo;
   List<Sale> get heldBills => List.unmodifiable(_heldBills);
   ExchangeVoucher? get appliedExchangeVoucher => _appliedExchangeVoucher;
 
@@ -497,8 +499,7 @@ class PosController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final baseInvoiceNo = await salesRepository.generateNextInvoiceNumber();
-      final returnInvoiceNo = baseInvoiceNo.replaceFirst('INV-', 'RET-');
+      final returnInvoiceNo = await salesRepository.generateNextInvoiceNumber(prefix: 'RET-');
       final returnTotal = (subtotal - _discountAmount).clamp(0.0, double.infinity);
       final cashier = authService.currentUser.value?.displayName ?? 'Admin';
       final now = DateTime.now().toIso8601String();
@@ -555,30 +556,55 @@ class PosController extends ChangeNotifier {
 
   // --- Hold and Resume Bills ---
 
-  Future<void> holdCurrentBill() async {
+  Future<Sale> holdCurrentBill({bool printReceipt = true}) async {
     if (_cartItems.isEmpty) {
       throw const PosOperationException('Cannot hold an empty bill');
     }
 
     final invoiceNo = await salesRepository.generateNextInvoiceNumber();
+    final cashierName = authService.currentUser.value?.displayName ?? 'Admin';
+    final customerName = _selectedCustomer?.name ?? 'Walk-in Customer';
+
     final heldSale = Sale(
       invoiceNo: invoiceNo,
       customerId: _selectedCustomer?.id,
-      customerName: _selectedCustomer?.name ?? 'Walk-in Customer',
+      customerName: customerName,
       subtotal: subtotal,
       discount: _discountAmount,
       tax: taxAmount,
       grandTotal: grandTotal,
       status: 'HELD',
-      cashierName: authService.currentUser.value?.displayName ?? 'Admin',
+      cashierName: cashierName,
       items: List.from(_cartItems),
     );
+
+    final totalAmount = grandTotal;
+    final totalLines = _cartItems.length;
+    final totalQty = _cartItems.fold<double>(0.0, (acc, item) => acc + item.quantity);
 
     final saleId = await salesRepository.insertSaleWithItems(heldSale, _cartItems);
     final savedHeldSale = heldSale.copyWith(id: saleId);
 
     _heldBills.insert(0, savedHeldSale);
     clearCart();
+
+    if (printReceipt) {
+      try {
+        await PrinterService.printHoldReceipt(
+          holdNo: invoiceNo,
+          totalAmount: totalAmount,
+          totalItemsCount: totalLines,
+          totalQuantity: totalQty,
+          customerName: customerName,
+          cashierName: cashierName,
+        );
+      } catch (e) {
+        debugPrint('Hold receipt print failed: $e');
+      }
+    }
+
+    notifyListeners();
+    return savedHeldSale;
   }
 
   Future<void> resumeHeldBill(Sale heldSale) async {
@@ -588,6 +614,7 @@ class PosController extends ChangeNotifier {
     _selectedCustomer = heldSale.customerId != null
         ? Customer(id: heldSale.customerId, name: heldSale.customerName)
         : null;
+    _lastRecalledBillNo = heldSale.invoiceNo;
     _heldBills.removeWhere((b) => b.id == heldSale.id || b.invoiceNo == heldSale.invoiceNo);
 
     if (heldSale.id != null) {
@@ -666,12 +693,32 @@ class PosController extends ChangeNotifier {
     }
   }
 
-  // Quick search product by code/barcode to add directly, or apply Exchange Voucher barcode
+  // Quick search product by code/barcode to add directly, or apply Exchange Voucher barcode, or recall Held Bill barcode
   Future<bool> quickAddByCodeOrBarcode(String query) async {
     if (query.trim().isEmpty) return false;
     final clean = query.trim();
 
-    // 1. Check if it's an Exchange Voucher barcode (e.g. EXC-123456 or existing voucher)
+    // 1. Check if query matches a Held Bill Barcode / Invoice Number
+    Sale? matchingHeldBill;
+    try {
+      matchingHeldBill = _heldBills.where((b) => b.invoiceNo.trim().toUpperCase() == clean.toUpperCase()).firstOrNull;
+      if (matchingHeldBill == null) {
+        final heldFromDb = await salesRepository.getSales(status: 'HELD');
+        matchingHeldBill = heldFromDb.where((b) => b.invoiceNo.trim().toUpperCase() == clean.toUpperCase()).firstOrNull;
+      }
+    } catch (_) {}
+
+    if (matchingHeldBill != null) {
+      if (_cartItems.isNotEmpty) {
+        throw PosOperationException(
+          'Cannot recall held bill (${matchingHeldBill.invoiceNo}): Current cart is not empty. Please clear or complete current cart first.',
+        );
+      }
+      await resumeHeldBill(matchingHeldBill);
+      return true;
+    }
+
+    // 2. Check if it's an Exchange Voucher barcode (e.g. EXC-123456 or existing voucher)
     if (clean.toUpperCase().startsWith('EXC-') || clean.toUpperCase().startsWith('EXC')) {
       try {
         final applied = await applyExchangeVoucherCode(clean);
@@ -679,7 +726,7 @@ class PosController extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // 2. Product Barcode / Code search
+    // 3. Product Barcode / Code search
     final product = await productRepository.getProductByBarcode(clean) ??
         await productRepository.getProductByCode(clean);
 
@@ -688,7 +735,7 @@ class PosController extends ChangeNotifier {
       return true;
     }
 
-    // 3. Fallback: try voucher lookup in case code doesn't start with EXC
+    // 4. Fallback: try voucher lookup in case code doesn't start with EXC
     if (exchangeRepository != null) {
       try {
         final applied = await applyExchangeVoucherCode(clean);

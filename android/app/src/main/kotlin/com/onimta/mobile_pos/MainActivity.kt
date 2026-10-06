@@ -267,6 +267,78 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "printItemWiseSalesReport" -> {
+                    val arguments = call.arguments as? Map<String, Any?>
+                    if (arguments == null) {
+                        result.error("INVALID_ARGS", "Report data cannot be null", null)
+                        return@setMethodCallHandler
+                    }
+
+                    val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
+                    np.printItemWiseSalesReport(arguments) { success, errorMsg ->
+                        runOnUiThread {
+                            if (success) {
+                                result.success(true)
+                            } else {
+                                result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
+                            }
+                        }
+                    }
+                }
+
+                "printTotalSalesReport" -> {
+                    val arguments = call.arguments as? Map<String, Any?>
+                    if (arguments == null) {
+                        result.error("INVALID_ARGS", "Report data cannot be null", null)
+                        return@setMethodCallHandler
+                    }
+
+                    val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
+                    np.printTotalSalesReport(arguments) { success, errorMsg ->
+                        runOnUiThread {
+                            if (success) {
+                                result.success(true)
+                            } else {
+                                result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
+                            }
+                        }
+                    }
+                }
+
+                "printHoldReceipt" -> {
+                    val arguments = call.arguments as? Map<String, Any?>
+                    if (arguments == null) {
+                        result.error("INVALID_ARGS", "Hold receipt data cannot be null", null)
+                        return@setMethodCallHandler
+                    }
+
+                    if (selectedDevice == "WPOS_3") {
+                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
+                        wp.printHoldReceipt(arguments) { success, errorMsg ->
+                            runOnUiThread {
+                                if (success) result.success(true)
+                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
+                            }
+                        }
+                    } else {
+                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
+                        np.printHoldReceipt(arguments) { success, errorMsg ->
+                            runOnUiThread {
+                                if (success) {
+                                    result.success(true)
+                                } else {
+                                    wpos3Printer?.printHoldReceipt(arguments) { wSuccess, wMsg ->
+                                        runOnUiThread {
+                                            if (wSuccess) result.success(true)
+                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
+                                        }
+                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }

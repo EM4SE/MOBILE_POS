@@ -1,5 +1,7 @@
 import '../../../app/constants/database_constants.dart';
 import '../../../core/services/database_service.dart';
+import '../../../core/utils/payment_helper.dart';
+import '../../models/reports_model.dart';
 import '../../models/sale_item_model.dart';
 import '../../models/sale_model.dart';
 
@@ -11,8 +13,10 @@ abstract class SalesLocalDataSource {
   Future<List<SaleItem>> getSaleItems(int saleId);
   Future<int> updateSaleStatus(int saleId, String status);
   Future<int> deleteSale(int saleId);
-  Future<String> generateNextInvoiceNumber();
+  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'});
   Future<double> getTodayTotalSales();
+  Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter});
+  Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter});
 }
 
 class SalesLocalDataSourceImpl implements SalesLocalDataSource {
@@ -142,13 +146,14 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
   }
 
   @override
-  Future<String> generateNextInvoiceNumber() async {
+  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'}) async {
     final now = DateTime.now();
     final datePrefix = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final searchPattern = '$prefix$datePrefix%';
     
     final results = await _databaseService.rawQuery(
       'SELECT ${DatabaseConstants.colInvoiceNo} FROM ${DatabaseConstants.tableSales} WHERE ${DatabaseConstants.colInvoiceNo} LIKE ?',
-      ['INV-$datePrefix%'],
+      [searchPattern],
     );
 
     int maxSeq = 0;
@@ -166,7 +171,7 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
     }
 
     int nextSeq = maxSeq + 1;
-    String candidate = 'INV-$datePrefix-${nextSeq.toString().padLeft(4, '0')}';
+    String candidate = '$prefix$datePrefix-${nextSeq.toString().padLeft(4, '0')}';
 
     while (true) {
       final exists = await _databaseService.query(
@@ -177,7 +182,7 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       );
       if (exists.isEmpty) break;
       nextSeq++;
-      candidate = 'INV-$datePrefix-${nextSeq.toString().padLeft(4, '0')}';
+      candidate = '$prefix$datePrefix-${nextSeq.toString().padLeft(4, '0')}';
     }
 
     return candidate;
@@ -194,5 +199,111 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       return (result.first['total'] as num).toDouble();
     }
     return 0.0;
+  }
+
+  @override
+  Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter}) async {
+    String whereClause = 's.${DatabaseConstants.colStatus} = "COMPLETED"';
+    List<Object?> args = [];
+
+    if (dateFilter != null && dateFilter.isNotEmpty) {
+      whereClause += ' AND s.${DatabaseConstants.colCreatedAt} LIKE ?';
+      args.add('$dateFilter%');
+    }
+
+    final results = await _databaseService.rawQuery('''
+      SELECT si.${DatabaseConstants.colProductDescription} as product_description,
+             SUM(si.${DatabaseConstants.colQuantity}) as total_qty,
+             SUM(si.${DatabaseConstants.colLineTotal}) as total_amount
+      FROM ${DatabaseConstants.tableSaleItems} si
+      JOIN ${DatabaseConstants.tableSales} s ON si.${DatabaseConstants.colSaleId} = s.${DatabaseConstants.colId}
+      WHERE $whereClause
+      GROUP BY si.${DatabaseConstants.colProductDescription}
+      ORDER BY total_amount DESC
+    ''', args);
+
+    return results.map(ItemWiseSaleReportItem.fromMap).toList();
+  }
+
+  @override
+  Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter}) async {
+    String completedWhere = '${DatabaseConstants.colStatus} = ?';
+    String returnWhere = '${DatabaseConstants.colStatus} = ?';
+    List<Object?> completedArgs = ['COMPLETED'];
+    List<Object?> returnArgs = ['RETURNED'];
+
+    if (dateFilter != null && dateFilter.isNotEmpty) {
+      completedWhere += ' AND ${DatabaseConstants.colCreatedAt} LIKE ?';
+      completedArgs.add('$dateFilter%');
+      returnWhere += ' AND ${DatabaseConstants.colCreatedAt} LIKE ?';
+      returnArgs.add('$dateFilter%');
+    }
+
+    final completedSales = await _databaseService.query(
+      DatabaseConstants.tableSales,
+      where: completedWhere,
+      whereArgs: completedArgs,
+    );
+
+    final returnedSales = await _databaseService.query(
+      DatabaseConstants.tableSales,
+      where: returnWhere,
+      whereArgs: returnArgs,
+    );
+
+    int totalInvoices = completedSales.length;
+    double grossSales = 0.0;
+    double totalDiscount = 0.0;
+    double totalTax = 0.0;
+    double netSales = 0.0;
+    double cashSales = 0.0;
+    double cardSales = 0.0;
+    double qrSales = 0.0;
+    double creditSales = 0.0;
+
+    for (final s in completedSales) {
+      final subtotal = ((s[DatabaseConstants.colSubtotal] as num?) ?? 0.0).toDouble();
+      final discount = ((s[DatabaseConstants.colDiscount] as num?) ?? 0.0).toDouble();
+      final tax = ((s[DatabaseConstants.colTax] as num?) ?? 0.0).toDouble();
+      final grandTotal = ((s[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
+      final paid = ((s[DatabaseConstants.colPaidAmount] as num?) ?? 0.0).toDouble();
+      final rawMethod = s[DatabaseConstants.colPaymentMethod] as String?;
+
+      grossSales += subtotal;
+      totalDiscount += discount;
+      totalTax += tax;
+      netSales += grandTotal;
+
+      final parsedItems = PaymentBreakdownHelper.parse(rawMethod, paid);
+      final agg = PaymentBreakdownHelper.aggregate(parsedItems);
+
+      cashSales += agg.cash;
+      cardSales += agg.card;
+      qrSales += agg.qr;
+      creditSales += agg.credit;
+    }
+
+    int totalReturnsCount = returnedSales.length;
+    double totalReturnsAmount = 0.0;
+    for (final r in returnedSales) {
+      totalReturnsAmount += ((r[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
+    }
+
+    final totalNetRevenue = netSales - totalReturnsAmount;
+
+    return TotalSalesReportData(
+      totalInvoices: totalInvoices,
+      grossSales: grossSales,
+      totalDiscount: totalDiscount,
+      totalTax: totalTax,
+      netSales: netSales,
+      totalReturnsCount: totalReturnsCount,
+      totalReturnsAmount: totalReturnsAmount,
+      totalNetRevenue: totalNetRevenue,
+      cashSales: cashSales,
+      cardSales: cardSales,
+      qrSales: qrSales,
+      creditSales: creditSales,
+    );
   }
 }

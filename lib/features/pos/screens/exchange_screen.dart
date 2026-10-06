@@ -8,7 +8,7 @@ import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controllers/pos_controller.dart';
 
-/// Full Dedicated Screen for Issuing Exchange Vouchers with Barcode Printing
+/// Clean, Responsive Full Dedicated Screen for Issuing Exchange Vouchers
 class ExchangeScreen extends StatefulWidget {
   final PosController controller;
 
@@ -33,7 +33,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
       if (!mounted) return;
       AppDialog.showSnackBar(
         context,
-        'Exchange voucher ${voucher.voucherCode} issued successfully (${CurrencyFormatter.formatWithSymbol(voucher.totalAmount)})',
+        'Exchange voucher ${voucher.voucherCode} issued (${CurrencyFormatter.formatWithSymbol(voucher.totalAmount)})',
       );
       Navigator.of(context).popUntil((route) => route.settings.name == AppRoutes.pos || route.isFirst);
     } catch (e) {
@@ -58,206 +58,192 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Highlights Banner
-            Container(
-              color: const Color(0xFFFFF7ED),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEA580C).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
-                    ),
-                    child: const Icon(Icons.sync_alt, color: Color(0xFFEA580C), size: 28),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'EXCHANGE VOUCHER ISSUANCE',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF9A3412),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Prints an Exchange Receipt with scannable barcode for future purchases',
-                          style: TextStyle(fontSize: 11, color: Color(0xFFC2410C)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Divider(height: 1, color: Color(0xFFFDBA74)),
-
-            // Customer banner if assigned
-            if (customer != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: AppColors.surfaceSecondary,
-                child: Row(
-                  children: [
-                    const Icon(Icons.person, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Customer: ${customer.name}${customer.phone.isNotEmpty ? " (${customer.phone})" : ""}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Exchanged Items Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'EXCHANGED ITEMS (${widget.controller.totalItemCount} TOTAL QTY)',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  Text(
-                    '${items.length} Distinct Line Items',
-                    style: const TextStyle(fontSize: 11, color: AppColors.textLight),
-                  ),
-                ],
-              ),
-            ),
-
-            // Items List
+            // Scrollable Content Area (Prevents any overflow on small screens)
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
-                itemBuilder: (ctx, index) {
-                  final item = items[index];
-                  return Card(
-                    margin: EdgeInsets.zero,
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
-                      side: const BorderSide(color: AppColors.border),
-                    ),
-                    color: AppColors.surface,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Customer banner if assigned
+                    if (customer != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSecondary,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person, size: 18, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Customer: ${customer.name}${customer.phone.isNotEmpty ? " (${customer.phone})" : ""}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Exchanged Items Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            width: 30,
-                            height: 30,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '${index + 1}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.productDescription,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Qty: ${item.quantity.toInt()}  ×  ${CurrencyFormatter.formatWithSymbol(item.unitPrice)}',
-                                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-                                ),
-                              ],
+                          Text(
+                            'EXCHANGED ITEMS (${widget.controller.totalItemCount} QTY)',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
                             ),
                           ),
                           Text(
-                            CurrencyFormatter.formatWithSymbol(item.lineTotal),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                            '${items.length} Line Items',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textLight),
                           ),
                         ],
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
+                    const SizedBox(height: 4),
 
-            // Summary Card
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF7ED),
-                border: Border(
-                  top: BorderSide(color: Color(0xFFFDBA74), width: 1.5),
+                    // Exchanged Items List Box
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                        color: AppColors.surface,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+                        itemBuilder: (ctx, index) {
+                          final item = items[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.productDescription,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Qty: ${item.quantity.toInt()}  ×  ${CurrencyFormatter.formatWithSymbol(item.unitPrice)}',
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  CurrencyFormatter.formatWithSymbol(item.lineTotal),
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Total Exchange Value Banner
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        border: Border.all(color: const Color(0xFFFDBA74), width: 1.5),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Flexible(
+                            child: Text(
+                              'TOTAL CREDIT AMOUNT:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF9A3412),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            CurrencyFormatter.formatWithSymbol(totalAmount),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFEA580C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'TOTAL VOUCHER CREDIT AMOUNT:',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF9A3412)),
-                      ),
-                      Text(
-                        CurrencyFormatter.formatWithSymbol(totalAmount),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFFEA580C),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Row(
-                    children: [
-                      Icon(Icons.qr_code_scanner, size: 16, color: Color(0xFFC2410C)),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'The customer can redeem this voucher on any future bill by scanning its receipt barcode.',
-                          style: TextStyle(fontSize: 10.5, color: Color(0xFF9A3412), height: 1.2),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
 
-            // Fixed Bottom Action Buttons
+            // Fixed Bottom Action Bar
             Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.surface,
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
               child: Row(
                 children: [
                   Expanded(
                     flex: 1,
                     child: SizedBox(
-                      height: 48,
+                      height: 46,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -267,11 +253,11 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     flex: 2,
                     child: SizedBox(
-                      height: 48,
+                      height: 46,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFEA580C),
@@ -282,14 +268,14 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                         onPressed: _isProcessing ? null : _handleConfirm,
                         icon: _isProcessing
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 18,
+                                height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Icon(Icons.print, size: 20),
+                            : const Icon(Icons.print, size: 18),
                         label: Text(
-                          _isProcessing ? 'PRINTING VOUCHER...' : 'ISSUE & PRINT VOUCHER',
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, letterSpacing: 0.5),
+                          _isProcessing ? 'PRINTING...' : 'ISSUE & PRINT VOUCHER',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
                         ),
                       ),
                     ),

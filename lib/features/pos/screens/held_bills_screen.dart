@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/services/printer_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/sale_model.dart';
@@ -89,6 +90,28 @@ class HeldBillsScreen extends StatelessWidget {
             duration: const Duration(seconds: 1),
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _handlePrint(BuildContext context, Sale heldBill) async {
+    FeedbackHelper.vibrate();
+    final totalQty = heldBill.items.fold<double>(0.0, (acc, item) => acc + item.quantity);
+    final res = await PrinterService.printHoldReceipt(
+      holdNo: heldBill.invoiceNo,
+      totalAmount: heldBill.grandTotal,
+      totalItemsCount: heldBill.items.length,
+      totalQuantity: totalQty,
+      customerName: heldBill.customerName,
+      cashierName: heldBill.cashierName,
+      dateTime: heldBill.createdAt,
+    );
+
+    if (context.mounted) {
+      if (res.success) {
+        AppDialog.showSnackBar(context, 'Printed hold receipt for ${heldBill.invoiceNo}');
+      } else {
+        AppDialog.showSnackBar(context, 'Printer error: ${res.errorMessage}', isError: true);
       }
     }
   }
@@ -288,10 +311,18 @@ class HeldBillsScreen extends StatelessWidget {
 
                       const SizedBox(width: 6),
 
-                      // 3. Right: Single Row Action Buttons (Discard & Recall)
+                      // 3. Right: Single Row Action Buttons (Print, Discard & Recall)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            icon: const Icon(Icons.print_outlined, color: AppColors.accent, size: 19),
+                            tooltip: 'Print Barcode Slip',
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                            onPressed: () => _handlePrint(context, bill),
+                          ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 19),
                             tooltip: 'Discard',
