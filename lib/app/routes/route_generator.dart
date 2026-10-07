@@ -79,7 +79,6 @@ class RouteGenerator {
           LoginScreen(
             controller: loginController,
             shiftService: shiftService,
-            productRepository: productRepository,
           ),
           settings,
         );

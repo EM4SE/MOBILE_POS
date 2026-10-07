@@ -230,18 +230,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
             },
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sync, color: Colors.white),
-            tooltip: 'Sync from Server',
-            onPressed: () async {
-              AppDialog.showSnackBar(context, 'Syncing products from server...');
-              final count = await widget.controller.syncProductsFromApi();
-              if (context.mounted) {
-                AppDialog.showSnackBar(context, 'Synced $count products successfully');
-              }
-            },
-          ),
+        actions: const [
+          SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
