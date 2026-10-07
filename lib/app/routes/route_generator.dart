@@ -5,6 +5,7 @@ import '../../data/models/customer_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/sale_model.dart';
 import '../../data/repositories/sales_repository.dart';
+import '../../data/repositories/product_repository.dart';
 import '../../data/repositories/shift_repository.dart';
 import '../../features/authentication/controllers/login_controller.dart';
 import '../../features/authentication/screens/login_screen.dart';
@@ -47,6 +48,7 @@ class RouteGenerator {
   final SettingsController settingsController;
   final SalesRepository salesRepository;
   final ShiftRepository shiftRepository;
+  final ProductRepository productRepository;
 
   RouteGenerator({
     required this.authService,
@@ -58,6 +60,7 @@ class RouteGenerator {
     required this.settingsController,
     required this.salesRepository,
     required this.shiftRepository,
+    required this.productRepository,
   });
 
   Route<dynamic> generateRoute(RouteSettings settings) {
@@ -76,6 +79,7 @@ class RouteGenerator {
           LoginScreen(
             controller: loginController,
             shiftService: shiftService,
+            productRepository: productRepository,
           ),
           settings,
         );
@@ -114,6 +118,8 @@ class RouteGenerator {
           MoreScreen(
             authService: authService,
             posController: posController,
+            productRepository: productRepository,
+            productController: productController,
           ),
           settings,
         );
@@ -217,6 +223,7 @@ class RouteGenerator {
           SettingsScreen(
             controller: settingsController,
             authService: authService,
+            productRepository: productRepository,
           ),
           settings,
         );

@@ -25,6 +25,7 @@ class DatabaseMigrations {
         ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
         ${DatabaseConstants.colCode} TEXT NOT NULL UNIQUE,
         ${DatabaseConstants.colBarcode} TEXT,
+        ${DatabaseConstants.colIsbn} TEXT,
         ${DatabaseConstants.colDescription} TEXT NOT NULL,
         ${DatabaseConstants.colPrice} REAL NOT NULL,
         ${DatabaseConstants.colCost} REAL DEFAULT 0.0,
@@ -169,6 +170,7 @@ class DatabaseMigrations {
     // Indices for optimal POS query performance on older hardware
     await db.execute('CREATE INDEX idx_products_code ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colCode});');
     await db.execute('CREATE INDEX idx_products_barcode ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colBarcode});');
+    await db.execute('CREATE INDEX idx_products_isbn ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colIsbn});');
     await db.execute('CREATE INDEX idx_products_active ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colActive});');
     await db.execute('CREATE INDEX idx_customers_phone ON ${DatabaseConstants.tableCustomers} (${DatabaseConstants.colPhone});');
     await db.execute('CREATE INDEX idx_sales_invoice ON ${DatabaseConstants.tableSales} (${DatabaseConstants.colInvoiceNo});');
@@ -229,52 +231,7 @@ class DatabaseMigrations {
       });
     }
 
-    // 3. Seed Standard POS Products for rapid testing & live use
-    final sampleProducts = [
-      {'code': 'P101', 'barcode': '890103001', 'desc': 'Coca Cola 400ml', 'price': 250.0, 'cost': 180.0},
-      {'code': 'P102', 'barcode': '890103002', 'desc': 'Special Lunch Buffet', 'price': 850.0, 'cost': 520.0},
-      {'code': 'P103', 'barcode': '890103003', 'desc': 'Espresso Double Shot', 'price': 450.0, 'cost': 150.0},
-      {'code': 'P104', 'barcode': '890103004', 'desc': 'Club Sandwich Supreme', 'price': 950.0, 'cost': 600.0},
-      {'code': 'P105', 'barcode': '890103005', 'desc': 'Mineral Water 500ml', 'price': 100.0, 'cost': 50.0},
-      {'code': 'P106', 'barcode': '890103006', 'desc': 'Crispy Chicken Burger', 'price': 1200.0, 'cost': 750.0},
-      {'code': 'P107', 'barcode': '890103007', 'desc': 'Iced Caramel Macchiato', 'price': 650.0, 'cost': 320.0},
-      {'code': 'P108', 'barcode': '890103008', 'desc': 'French Fries Large', 'price': 550.0, 'cost': 280.0},
-      {'code': 'P109', 'barcode': '4791034017015', 'desc': 'Munchee Lemonpuff 200g', 'price': 180.0, 'cost': 140.0},
-      {'code': 'P110', 'barcode': '890103010', 'desc': 'Red Bull Energy Drink 250ml', 'price': 650.0, 'cost': 450.0},
-      {'code': 'P111', 'barcode': '890103011', 'desc': 'Sprite 400ml Bottle', 'price': 250.0, 'cost': 180.0},
-      {'code': 'P112', 'barcode': '890103012', 'desc': 'Fresh Orange Juice 350ml', 'price': 480.0, 'cost': 250.0},
-      {'code': 'P113', 'barcode': '890103013', 'desc': 'Iced Coffee Milk Blend', 'price': 420.0, 'cost': 220.0},
-      {'code': 'P114', 'barcode': '890103014', 'desc': 'Hot Cappuccino Cup', 'price': 520.0, 'cost': 260.0},
-      {'code': 'P115', 'barcode': '890103015', 'desc': 'Beef Cheese Burger', 'price': 1350.0, 'cost': 850.0},
-      {'code': 'P116', 'barcode': '890103016', 'desc': 'Spicy Chicken Submarine', 'price': 1100.0, 'cost': 680.0},
-      {'code': 'P117', 'barcode': '890103017', 'desc': 'Chicken Kottu Rotti Full', 'price': 980.0, 'cost': 580.0},
-      {'code': 'P118', 'barcode': '890103018', 'desc': 'Veggie Cheese Pizza Slice', 'price': 620.0, 'cost': 350.0},
-      {'code': 'P119', 'barcode': '890103019', 'desc': 'Fried Chicken Rice Large', 'price': 920.0, 'cost': 550.0},
-      {'code': 'P120', 'barcode': '890103020', 'desc': 'Chocolate Fudge Brownie', 'price': 380.0, 'cost': 190.0},
-      {'code': 'P121', 'barcode': '890103021', 'desc': 'Glazed Cinnamon Donut', 'price': 220.0, 'cost': 110.0},
-      {'code': 'P122', 'barcode': '890103022', 'desc': 'Spicy Fish Bun', 'price': 120.0, 'cost': 70.0},
-      {'code': 'P123', 'barcode': '890103023', 'desc': 'Chicken Sausage Roll', 'price': 150.0, 'cost': 85.0},
-      {'code': 'P124', 'barcode': '4791034017022', 'desc': 'Munchee Super Cream Cracker', 'price': 220.0, 'cost': 160.0},
-      {'code': 'P125', 'barcode': '890103025', 'desc': 'Anchor Pure Butter 200g', 'price': 890.0, 'cost': 720.0},
-      {'code': 'P126', 'barcode': '890103026', 'desc': 'Highland Fresh Milk 1L', 'price': 460.0, 'cost': 380.0},
-      {'code': 'P127', 'barcode': '890103027', 'desc': 'Watawala Ceylon Tea 200g', 'price': 380.0, 'cost': 290.0},
-      {'code': 'P128', 'barcode': '890103028', 'desc': 'Keells White Sugar 1kg', 'price': 310.0, 'cost': 260.0},
-    ];
-
-    for (final p in sampleProducts) {
-      await db.insert(DatabaseConstants.tableProducts, {
-        DatabaseConstants.colCode: p['code'],
-        DatabaseConstants.colBarcode: p['barcode'],
-        DatabaseConstants.colDescription: p['desc'],
-        DatabaseConstants.colPrice: p['price'],
-        DatabaseConstants.colCost: p['cost'],
-        DatabaseConstants.colActive: 1,
-        DatabaseConstants.colCreatedAt: now,
-        DatabaseConstants.colUpdatedAt: now,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
-
-    // 4. Seed Default POS Settings
+    // 3. Seed Default POS Settings (Products are fetched dynamically from API)
     final defaultSettings = {
       'store_name': 'ONIMTA POS Terminal #1',
       'store_address': 'Main Street Commercial Center',
@@ -295,8 +252,8 @@ class DatabaseMigrations {
     }
   }
 
-  /// Ensure essential demo / standard products & customers exist in current database
-  static Future<void> ensureSampleProducts(Database db) async {
+  /// Clean legacy dummy sample products (P101-P128) and ensure default customer records
+  static Future<void> cleanLegacyDummyData(Database db) async {
     final now = DateTime.now().toIso8601String();
 
     // Clean up Walk-in Customer from customers table if it was previously inserted
@@ -304,6 +261,19 @@ class DatabaseMigrations {
       DatabaseConstants.tableCustomers,
       where: '${DatabaseConstants.colPhone} = ? OR ${DatabaseConstants.colName} = ?',
       whereArgs: ['0770000000', 'Walk-in Customer'],
+    );
+
+    // Clean up hardcoded dummy sample product codes (P101 through P128)
+    final dummyCodes = [
+      'P101', 'P102', 'P103', 'P104', 'P105', 'P106', 'P107', 'P108', 'P109', 'P110',
+      'P111', 'P112', 'P113', 'P114', 'P115', 'P116', 'P117', 'P118', 'P119', 'P120',
+      'P121', 'P122', 'P123', 'P124', 'P125', 'P126', 'P127', 'P128'
+    ];
+    final placeholders = List.filled(dummyCodes.length, '?').join(',');
+    await db.delete(
+      DatabaseConstants.tableProducts,
+      where: '${DatabaseConstants.colCode} IN ($placeholders)',
+      whereArgs: dummyCodes,
     );
 
     // Ensure Customers
@@ -337,53 +307,6 @@ class DatabaseMigrations {
           DatabaseConstants.colUpdatedAt: now,
         });
       }
-    }
-
-    // Ensure Products
-    final sampleProducts = [
-      {'code': 'P101', 'barcode': '890103001', 'desc': 'Coca Cola 400ml', 'price': 250.0, 'cost': 180.0},
-      {'code': 'P102', 'barcode': '890103002', 'desc': 'Special Lunch Buffet', 'price': 850.0, 'cost': 520.0},
-      {'code': 'P103', 'barcode': '890103003', 'desc': 'Espresso Double Shot', 'price': 450.0, 'cost': 150.0},
-      {'code': 'P104', 'barcode': '890103004', 'desc': 'Club Sandwich Supreme', 'price': 950.0, 'cost': 600.0},
-      {'code': 'P105', 'barcode': '890103005', 'desc': 'Mineral Water 500ml', 'price': 100.0, 'cost': 50.0},
-      {'code': 'P106', 'barcode': '890103006', 'desc': 'Crispy Chicken Burger', 'price': 1200.0, 'cost': 750.0},
-      {'code': 'P107', 'barcode': '890103007', 'desc': 'Iced Caramel Macchiato', 'price': 650.0, 'cost': 320.0},
-      {'code': 'P108', 'barcode': '890103008', 'desc': 'French Fries Large', 'price': 550.0, 'cost': 280.0},
-      {'code': 'P109', 'barcode': '4791034017015', 'desc': 'Munchee Lemonpuff 200g', 'price': 180.0, 'cost': 140.0},
-      {'code': 'P110', 'barcode': '890103010', 'desc': 'Red Bull Energy Drink 250ml', 'price': 650.0, 'cost': 450.0},
-      {'code': 'P111', 'barcode': '890103011', 'desc': 'Sprite 400ml Bottle', 'price': 250.0, 'cost': 180.0},
-      {'code': 'P112', 'barcode': '890103012', 'desc': 'Fresh Orange Juice 350ml', 'price': 480.0, 'cost': 250.0},
-      {'code': 'P113', 'barcode': '890103013', 'desc': 'Iced Coffee Milk Blend', 'price': 420.0, 'cost': 220.0},
-      {'code': 'P114', 'barcode': '890103014', 'desc': 'Hot Cappuccino Cup', 'price': 520.0, 'cost': 260.0},
-      {'code': 'P115', 'barcode': '890103015', 'desc': 'Beef Cheese Burger', 'price': 1350.0, 'cost': 850.0},
-      {'code': 'P116', 'barcode': '890103016', 'desc': 'Spicy Chicken Submarine', 'price': 1100.0, 'cost': 680.0},
-      {'code': 'P117', 'barcode': '890103017', 'desc': 'Chicken Kottu Rotti Full', 'price': 980.0, 'cost': 580.0},
-      {'code': 'P118', 'barcode': '890103018', 'desc': 'Veggie Cheese Pizza Slice', 'price': 620.0, 'cost': 350.0},
-      {'code': 'P119', 'barcode': '890103019', 'desc': 'Fried Chicken Rice Large', 'price': 920.0, 'cost': 550.0},
-      {'code': 'P120', 'barcode': '890103020', 'desc': 'Chocolate Fudge Brownie', 'price': 380.0, 'cost': 190.0},
-      {'code': 'P121', 'barcode': '890103021', 'desc': 'Glazed Cinnamon Donut', 'price': 220.0, 'cost': 110.0},
-      {'code': 'P122', 'barcode': '890103022', 'desc': 'Spicy Fish Bun', 'price': 120.0, 'cost': 70.0},
-      {'code': 'P123', 'barcode': '890103023', 'desc': 'Chicken Sausage Roll', 'price': 150.0, 'cost': 85.0},
-      {'code': 'P124', 'barcode': '4791034017022', 'desc': 'Munchee Super Cream Cracker', 'price': 220.0, 'cost': 160.0},
-      {'code': 'P125', 'barcode': '890103025', 'desc': 'Anchor Pure Butter 200g', 'price': 890.0, 'cost': 720.0},
-      {'code': 'P126', 'barcode': '890103026', 'desc': 'Highland Fresh Milk 1L', 'price': 460.0, 'cost': 380.0},
-      {'code': 'P127', 'barcode': '890103027', 'desc': 'Watawala Ceylon Tea 200g', 'price': 380.0, 'cost': 290.0},
-      {'code': 'P128', 'barcode': '890103028', 'desc': 'Keells White Sugar 1kg', 'price': 310.0, 'cost': 260.0},
-    ];
-
-    for (final p in sampleProducts) {
-      await db.rawInsert('''
-        INSERT OR IGNORE INTO ${DatabaseConstants.tableProducts}
-        (${DatabaseConstants.colCode}, ${DatabaseConstants.colBarcode}, ${DatabaseConstants.colDescription}, ${DatabaseConstants.colPrice}, ${DatabaseConstants.colCost}, ${DatabaseConstants.colActive}, ${DatabaseConstants.colCreatedAt}, ${DatabaseConstants.colUpdatedAt})
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-      ''', [p['code'], p['barcode'], p['desc'], p['price'], p['cost'], now, now]);
-
-      // If already exists by code/barcode, update to ensure barcode and descriptions are accurate
-      await db.rawUpdate('''
-        UPDATE ${DatabaseConstants.tableProducts}
-        SET ${DatabaseConstants.colBarcode} = ?, ${DatabaseConstants.colDescription} = ?, ${DatabaseConstants.colPrice} = ?, ${DatabaseConstants.colCost} = ?
-        WHERE ${DatabaseConstants.colBarcode} = ? OR ${DatabaseConstants.colCode} = ?
-      ''', [p['barcode'], p['desc'], p['price'], p['cost'], p['barcode'], p['code']]);
     }
   }
 
@@ -469,6 +392,14 @@ class DatabaseMigrations {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_shifts_status ON ${DatabaseConstants.tableShifts} (${DatabaseConstants.colStatus});');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_voucher_code ON ${DatabaseConstants.tableExchangeVouchers} (${DatabaseConstants.colVoucherCode});');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_movements_shift ON ${DatabaseConstants.tableCashMovements} (shift_id);');
+
+      // Safe update for existing products table to support ISBN
+      try {
+        await db.execute('ALTER TABLE ${DatabaseConstants.tableProducts} ADD COLUMN ${DatabaseConstants.colIsbn} TEXT;');
+      } catch (_) {}
+      try {
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_products_isbn ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colIsbn});');
+      } catch (_) {}
     } catch (_) {}
   }
 

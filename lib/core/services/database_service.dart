@@ -5,6 +5,7 @@ import '../database/database_helper.dart';
 abstract class DatabaseService {
   Future<Database> get database;
   Future<int> insert(String table, Map<String, dynamic> values);
+  Future<int> insertBatch(String table, List<Map<String, dynamic>> items);
   Future<List<Map<String, dynamic>>> query(
     String table, {
     bool? distinct,
@@ -36,6 +37,18 @@ class DatabaseServiceImpl implements DatabaseService {
   Future<int> insert(String table, Map<String, dynamic> values) async {
     final db = await database;
     return await db.insert(table, values, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<int> insertBatch(String table, List<Map<String, dynamic>> items) async {
+    if (items.isEmpty) return 0;
+    final db = await database;
+    final batch = db.batch();
+    for (final item in items) {
+      batch.insert(table, item, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+    return items.length;
   }
 
   @override

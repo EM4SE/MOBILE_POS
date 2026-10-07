@@ -93,6 +93,7 @@ void main() async {
     settingsController: settingsController,
     salesRepository: salesRepository,
     shiftRepository: shiftRepository,
+    productRepository: productRepository,
   );
 
   runApp(PosApp(routeGenerator: routeGenerator));

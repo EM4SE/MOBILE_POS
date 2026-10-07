@@ -12,15 +12,19 @@ import '../../../shared/widgets/app_text_field.dart';
 import '../controllers/settings_controller.dart';
 import '../widgets/settings_tile.dart';
 
+import '../../../data/repositories/product_repository.dart';
+
 /// Settings screen featuring flat Windows 8-style configuration tiles
 class SettingsScreen extends StatefulWidget {
   final SettingsController controller;
   final AuthenticationService authService;
+  final ProductRepository? productRepository;
 
   const SettingsScreen({
     super.key,
     required this.controller,
     required this.authService,
+    this.productRepository,
   });
 
   @override
@@ -28,6 +32,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _isSyncing = false;
   @override
   void initState() {
     super.initState();
@@ -318,29 +323,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showDatabaseSettingsDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Database & Storage Info'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Engine: SQLite 3 with Local-First Offline Mode', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Database File: pos_database.db'),
-            SizedBox(height: 4),
-            Text('Encryption & Integrity: Active'),
-            SizedBox(height: 4),
-            Text('Automatic local transactions & indexing enabled.'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          title: const Text('Database & Storage Info'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Engine: SQLite 3 with Local-First Offline Mode', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Database File: pos_database.db'),
+              const SizedBox(height: 4),
+              const Text('Encryption & Integrity: Active'),
+              const SizedBox(height: 4),
+              const Text('Automatic local transactions & indexing enabled.'),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text('Server Product Catalog:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              Center(
+                child: _isSyncing
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 10),
+                          Text('Syncing from server...', style: TextStyle(fontSize: 13)),
+                        ],
+                      )
+                    : OutlinedButton.icon(
+                        icon: const Icon(Icons.sync, size: 18),
+                        label: const Text('Sync Products Catalog Now'),
+                        onPressed: widget.productRepository == null
+                            ? null
+                            : () async {
+                                setDialogState(() => _isSyncing = true);
+                                setState(() => _isSyncing = true);
+                                final count = await widget.productRepository!.syncProductsFromApi();
+                                setDialogState(() => _isSyncing = false);
+                                setState(() => _isSyncing = false);
+                                if (ctx.mounted) {
+                                  Navigator.of(ctx).pop();
+                                }
+                                if (mounted) {
+                                  AppDialog.showSnackBar(context, 'Successfully synced $count products into SQLite');
+                                }
+                              },
+                      ),
+              ),
+            ],
+          ),
+          actions: [
+            AppButton(
+              label: 'Close',
+              variant: AppButtonVariant.primary,
+              width: 100,
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
           ],
         ),
-        actions: [
-          AppButton(
-            label: 'Close',
-            variant: AppButtonVariant.primary,
-            width: 100,
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-        ],
       ),
     );
   }

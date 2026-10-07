@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import '../datasources/local/product_local_datasource.dart';
+import '../datasources/remote/product_remote_datasource.dart';
 import '../models/product_model.dart';
 
 abstract class ProductRepository {
@@ -10,12 +12,28 @@ abstract class ProductRepository {
   Future<int> updateProduct(Product product);
   Future<int> deleteProduct(int id);
   Future<int> countProducts({String? searchQuery, bool onlyActive = true});
+  
+  /// Full catalog download across all departments & categories into SQLite
+  Future<int> syncProductsFromApi({
+    String? baseUrl,
+    void Function(int count, String status)? onProgress,
+  });
+
+  /// Fast quick-catalog sync
+  Future<int> syncQuickProductsFromApi({String? baseUrl});
+
+  /// Fetch single product from API by code and cache to SQLite
+  Future<Product?> fetchAndCacheProductByCode(String code, {String? baseUrl});
 }
 
 class ProductRepositoryImpl implements ProductRepository {
   final ProductLocalDataSource _localDataSource;
+  final ProductRemoteDataSource _remoteDataSource;
 
-  ProductRepositoryImpl(this._localDataSource);
+  ProductRepositoryImpl(
+    this._localDataSource, [
+    ProductRemoteDataSource? remoteDataSource,
+  ]) : _remoteDataSource = remoteDataSource ?? ProductRemoteDataSourceImpl();
 
   @override
   Future<List<Product>> getProducts({
@@ -38,13 +56,21 @@ class ProductRepositoryImpl implements ProductRepository {
   }
 
   @override
-  Future<Product?> getProductByCode(String code) {
-    return _localDataSource.getProductByCode(code);
+  Future<Product?> getProductByCode(String code) async {
+    final local = await _localDataSource.getProductByCode(code);
+    if (local != null) return local;
+
+    // Online fallback if missing in local SQLite
+    return await fetchAndCacheProductByCode(code);
   }
 
   @override
-  Future<Product?> getProductByBarcode(String barcode) {
-    return _localDataSource.getProductByBarcode(barcode);
+  Future<Product?> getProductByBarcode(String barcode) async {
+    final local = await _localDataSource.getProductByBarcode(barcode);
+    if (local != null) return local;
+
+    // Online fallback
+    return await fetchAndCacheProductByCode(barcode);
   }
 
   @override
@@ -68,5 +94,56 @@ class ProductRepositoryImpl implements ProductRepository {
       searchQuery: searchQuery,
       onlyActive: onlyActive,
     );
+  }
+
+  @override
+  Future<int> syncProductsFromApi({
+    String? baseUrl,
+    void Function(int count, String status)? onProgress,
+  }) async {
+    try {
+      final remoteProducts = await _remoteDataSource.fetchAllProductsFromApi(
+        baseUrl: baseUrl,
+        onProgress: onProgress,
+      );
+      if (remoteProducts.isEmpty) return 0;
+
+      onProgress?.call(remoteProducts.length, 'Saving ${remoteProducts.length} items to SQLite...');
+      await _localDataSource.insertProducts(remoteProducts);
+      debugPrint('ProductRepository: Saved ${remoteProducts.length} products to SQLite');
+      return remoteProducts.length;
+    } catch (e) {
+      debugPrint('ProductRepository sync error: $e');
+      return 0;
+    }
+  }
+
+  @override
+  Future<int> syncQuickProductsFromApi({String? baseUrl}) async {
+    try {
+      final remoteProducts = await _remoteDataSource.fetchQuickProductsFromApi(baseUrl: baseUrl);
+      if (remoteProducts.isEmpty) return 0;
+
+      await _localDataSource.insertProducts(remoteProducts);
+      debugPrint('ProductRepository: Fast synced ${remoteProducts.length} products to SQLite');
+      return remoteProducts.length;
+    } catch (e) {
+      debugPrint('ProductRepository quick sync error: $e');
+      return 0;
+    }
+  }
+
+  @override
+  Future<Product?> fetchAndCacheProductByCode(String code, {String? baseUrl}) async {
+    try {
+      final remoteProduct = await _remoteDataSource.fetchProductByCode(code, baseUrl: baseUrl);
+      if (remoteProduct != null) {
+        await _localDataSource.insertProduct(remoteProduct);
+        return remoteProduct;
+      }
+    } catch (e) {
+      debugPrint('ProductRepository fetchAndCacheProductByCode notice: $e');
+    }
+    return null;
   }
 }

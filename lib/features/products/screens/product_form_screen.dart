@@ -29,6 +29,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   late final TextEditingController _codeController;
   late final TextEditingController _barcodeController;
+  late final TextEditingController _isbnController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _priceController;
   late final TextEditingController _costController;
@@ -42,6 +43,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final p = widget.productToEdit;
     _codeController = TextEditingController(text: p?.code ?? '');
     _barcodeController = TextEditingController(text: p?.barcode ?? '');
+    _isbnController = TextEditingController(text: p?.isbn ?? '');
     _descriptionController = TextEditingController(text: p?.description ?? '');
     _priceController = TextEditingController(text: p != null ? p.price.toStringAsFixed(2) : '');
     _costController = TextEditingController(text: p != null && p.cost > 0 ? p.cost.toStringAsFixed(2) : '');
@@ -52,6 +54,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   void dispose() {
     _codeController.dispose();
     _barcodeController.dispose();
+    _isbnController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
     _costController.dispose();
@@ -67,6 +70,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       id: widget.productToEdit?.id,
       code: _codeController.text,
       barcode: _barcodeController.text,
+      isbn: _isbnController.text,
       description: _descriptionController.text,
       price: CurrencyFormatter.parseDouble(_priceController.text),
       cost: CurrencyFormatter.parseDouble(_costController.text),
@@ -107,7 +111,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Row 1: Code and Barcode
+                    // Row 1: Code, Barcode, ISBN
                     Row(
                       children: [
                         Expanded(
@@ -126,6 +130,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             label: 'Barcode (Optional)',
                             hintText: 'e.g. 890103001',
                             prefixIcon: Icons.view_week,
+                          ),
+                        ),
+                        const SizedBox(width: AppDimensions.md),
+                        Expanded(
+                          child: AppTextField(
+                            controller: _isbnController,
+                            label: 'ISBN (Optional)',
+                            hintText: 'e.g. 9780123456',
+                            prefixIcon: Icons.menu_book,
                           ),
                         ),
                       ],

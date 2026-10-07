@@ -8,6 +8,7 @@ import '../../../core/services/shift_service.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../core/utils/responsive_helper.dart';
 import '../../../core/widgets/pos_animated_loader.dart';
+import '../../../data/repositories/product_repository.dart';
 import '../controllers/login_controller.dart';
 import '../widgets/numeric_keypad.dart';
 
@@ -15,11 +16,13 @@ import '../widgets/numeric_keypad.dart';
 class LoginScreen extends StatefulWidget {
   final LoginController controller;
   final ShiftService shiftService;
+  final ProductRepository productRepository;
 
   const LoginScreen({
     super.key,
     required this.controller,
     required this.shiftService,
+    required this.productRepository,
   });
 
   @override
@@ -54,10 +57,33 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (user != null) {
         setState(() {
+          _statusMessage = 'Syncing Products from Server...';
+        });
+
+        // Fast Quick Sync products from backend API into SQLite with 2s timeout
+        try {
+          final count = await widget.productRepository
+              .syncQuickProductsFromApi()
+              .timeout(const Duration(seconds: 2));
+          debugPrint('Product quick sync: $count products preloaded');
+        } catch (e) {
+          debugPrint('Product quick sync notice: $e');
+        }
+
+        if (!mounted) return;
+
+        setState(() {
           _statusMessage = 'Checking Shift & POS Workspace...';
         });
 
-        await widget.shiftService.checkActiveSession();
+        try {
+          await widget.shiftService
+              .checkActiveSession()
+              .timeout(const Duration(seconds: 3));
+        } catch (e) {
+          debugPrint('Shift check notice: $e');
+        }
+
         if (!mounted) return;
 
         if (!widget.shiftService.hasActiveDay) {

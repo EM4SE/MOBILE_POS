@@ -52,6 +52,10 @@ class FakeProductRepository implements ProductRepository {
   Future<int> deleteProduct(int id) async => 1;
   @override
   Future<int> countProducts({String? searchQuery, bool onlyActive = true}) async => 0;
+  @override
+  Future<int> syncProductsFromApi({String? baseUrl}) async => 0;
+  @override
+  Future<Product?> fetchAndCacheProductByCode(String code, {String? baseUrl}) async => null;
 }
 
 class FakeCustomerRepository implements CustomerRepository {

@@ -42,7 +42,7 @@ class DatabaseHelper {
           onUpgrade: DatabaseMigrations.onUpgrade,
           onOpen: (db) async {
             await DatabaseMigrations.ensureSchemaUpdates(db);
-            await DatabaseMigrations.ensureSampleProducts(db);
+            await DatabaseMigrations.cleanLegacyDummyData(db);
           },
         ),
       );

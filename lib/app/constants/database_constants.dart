@@ -60,6 +60,7 @@ class DatabaseConstants {
   // Products Columns
   static const String colCode = 'code';
   static const String colBarcode = 'barcode';
+  static const String colIsbn = 'isbn';
   static const String colDescription = 'description';
   static const String colPrice = 'price';
   static const String colCost = 'cost';

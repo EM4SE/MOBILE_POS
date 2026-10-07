@@ -9,15 +9,22 @@ import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../pos/controllers/pos_controller.dart';
 
+import '../../../data/repositories/product_repository.dart';
+import '../../products/controllers/product_controller.dart';
+
 /// 3-Per-Row Square Grid Action Menu for Cashier & POS Operations
 class MoreScreen extends StatelessWidget {
   final AuthenticationService authService;
   final PosController posController;
+  final ProductRepository? productRepository;
+  final ProductController? productController;
 
   const MoreScreen({
     super.key,
     required this.authService,
     required this.posController,
+    this.productRepository,
+    this.productController,
   });
 
   Future<void> _handleLogout(BuildContext context) async {
@@ -256,6 +263,122 @@ class MoreScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
+  // Action: DOWNLOAD / SYNC ALL PRODUCTS FROM ERP
+  // ---------------------------------------------------------------------------
+  Future<void> _handleDownloadProducts(BuildContext context) async {
+    FeedbackHelper.vibrate();
+
+    if (productRepository == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Product repository service is not initialized.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    String currentStatus = 'Connecting to ERP server...';
+    int itemCount = 0;
+    bool isCompleted = false;
+    String? errorMessage;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // Trigger sync on open
+          if (!isCompleted && errorMessage == null && itemCount == 0 && currentStatus == 'Connecting to ERP server...') {
+            productRepository!.syncProductsFromApi(
+              onProgress: (count, status) {
+                setDialogState(() {
+                  itemCount = count;
+                  currentStatus = status;
+                });
+              },
+            ).then((totalCount) async {
+              setDialogState(() {
+                isCompleted = true;
+                itemCount = totalCount;
+                currentStatus = 'Successfully downloaded $totalCount products!';
+              });
+              await productController?.loadProducts();
+            }).catchError((err) {
+              setDialogState(() {
+                errorMessage = err.toString();
+              });
+            });
+          }
+
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+            title: Row(
+              children: [
+                Icon(
+                  isCompleted
+                      ? Icons.check_circle_outline
+                      : (errorMessage != null ? Icons.error_outline : Icons.cloud_download_outlined),
+                  color: isCompleted
+                      ? AppColors.success
+                      : (errorMessage != null ? AppColors.error : AppColors.primary),
+                  size: 26,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  isCompleted
+                      ? 'DOWNLOAD COMPLETE'
+                      : (errorMessage != null ? 'DOWNLOAD FAILED' : 'DOWNLOADING CATALOG'),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isCompleted && errorMessage == null) ...[
+                  const LinearProgressIndicator(
+                    backgroundColor: AppColors.border,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                Text(
+                  errorMessage ?? currentStatus,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: errorMessage != null ? AppColors.error : AppColors.textPrimary,
+                    height: 1.4,
+                  ),
+                ),
+                if (itemCount > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Stored in SQLite: $itemCount items',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              if (isCompleted || errorMessage != null)
+                AppButton(
+                  label: 'DONE',
+                  variant: AppButtonVariant.primary,
+                  width: 110,
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Build Square Menu Button Tile (3 per row)
   // ---------------------------------------------------------------------------
   Widget _buildSquareTile({
@@ -467,6 +590,15 @@ class MoreScreen extends StatelessWidget {
                     icon: Icons.inventory_2_outlined,
                     color: const Color(0xFF6366F1), // Indigo
                     onTap: () => Navigator.of(context).pushNamed(AppRoutes.products),
+                  ),
+
+                  // 9. DOWNLOAD PRODUCTS
+                  _buildSquareTile(
+                    context: context,
+                    label: 'DOWNLOAD\nPRODUCTS',
+                    icon: Icons.cloud_download_outlined,
+                    color: const Color(0xFF0284C7), // Sky Blue
+                    onTap: () => _handleDownloadProducts(context),
                   ),
 
                   // 9. SETTINGS

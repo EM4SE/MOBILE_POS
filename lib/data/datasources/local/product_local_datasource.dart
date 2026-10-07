@@ -8,6 +8,7 @@ abstract class ProductLocalDataSource {
   Future<Product?> getProductByCode(String code);
   Future<Product?> getProductByBarcode(String barcode);
   Future<int> insertProduct(Product product);
+  Future<int> insertProducts(List<Product> products);
   Future<int> updateProduct(Product product);
   Future<int> deleteProduct(int id);
   Future<int> countProducts({String? searchQuery, bool onlyActive = true});
@@ -35,9 +36,9 @@ class ProductLocalDataSourceImpl implements ProductLocalDataSource {
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final term = '%${searchQuery.trim()}%';
       conditions.add(
-        '(${DatabaseConstants.colDescription} LIKE ? OR ${DatabaseConstants.colCode} LIKE ? OR ${DatabaseConstants.colBarcode} LIKE ?)',
+        '(${DatabaseConstants.colDescription} LIKE ? OR ${DatabaseConstants.colCode} LIKE ? OR ${DatabaseConstants.colBarcode} LIKE ? OR ${DatabaseConstants.colIsbn} LIKE ?)',
       );
-      args.addAll([term, term, term]);
+      args.addAll([term, term, term, term]);
     }
 
     final where = conditions.isNotEmpty ? conditions.join(' AND ') : null;
@@ -68,10 +69,11 @@ class ProductLocalDataSourceImpl implements ProductLocalDataSource {
 
   @override
   Future<Product?> getProductByCode(String code) async {
+    final clean = code.trim();
     final results = await _databaseService.query(
       DatabaseConstants.tableProducts,
-      where: '${DatabaseConstants.colCode} = ?',
-      whereArgs: [code.trim()],
+      where: '${DatabaseConstants.colCode} = ? OR ${DatabaseConstants.colBarcode} = ? OR ${DatabaseConstants.colIsbn} = ?',
+      whereArgs: [clean, clean, clean],
       limit: 1,
     );
     if (results.isEmpty) return null;
@@ -80,10 +82,11 @@ class ProductLocalDataSourceImpl implements ProductLocalDataSource {
 
   @override
   Future<Product?> getProductByBarcode(String barcode) async {
+    final clean = barcode.trim();
     final results = await _databaseService.query(
       DatabaseConstants.tableProducts,
-      where: '${DatabaseConstants.colBarcode} = ?',
-      whereArgs: [barcode.trim()],
+      where: '${DatabaseConstants.colBarcode} = ? OR ${DatabaseConstants.colIsbn} = ? OR ${DatabaseConstants.colCode} = ?',
+      whereArgs: [clean, clean, clean],
       limit: 1,
     );
     if (results.isEmpty) return null;
@@ -95,6 +98,15 @@ class ProductLocalDataSourceImpl implements ProductLocalDataSource {
     return await _databaseService.insert(
       DatabaseConstants.tableProducts,
       product.toMap(),
+    );
+  }
+
+  @override
+  Future<int> insertProducts(List<Product> products) async {
+    if (products.isEmpty) return 0;
+    return await _databaseService.insertBatch(
+      DatabaseConstants.tableProducts,
+      products.map((p) => p.toMap()).toList(),
     );
   }
 
@@ -129,9 +141,9 @@ class ProductLocalDataSourceImpl implements ProductLocalDataSource {
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final term = '%${searchQuery.trim()}%';
       conditions.add(
-        '(${DatabaseConstants.colDescription} LIKE ? OR ${DatabaseConstants.colCode} LIKE ? OR ${DatabaseConstants.colBarcode} LIKE ?)',
+        '(${DatabaseConstants.colDescription} LIKE ? OR ${DatabaseConstants.colCode} LIKE ? OR ${DatabaseConstants.colBarcode} LIKE ? OR ${DatabaseConstants.colIsbn} LIKE ?)',
       );
-      args.addAll([term, term, term]);
+      args.addAll([term, term, term, term]);
     }
 
     final where = conditions.isNotEmpty ? 'WHERE ${conditions.join(' AND ')}' : '';

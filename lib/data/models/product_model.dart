@@ -5,6 +5,7 @@ class Product {
   final int? id;
   final String code;
   final String barcode;
+  final String isbn;
   final String description;
   final double price;
   final double cost;
@@ -16,6 +17,7 @@ class Product {
     this.id,
     required this.code,
     this.barcode = '',
+    this.isbn = '',
     required this.description,
     required this.price,
     this.cost = 0.0,
@@ -28,6 +30,7 @@ class Product {
     int? id,
     String? code,
     String? barcode,
+    String? isbn,
     String? description,
     double? price,
     double? cost,
@@ -39,6 +42,7 @@ class Product {
       id: id ?? this.id,
       code: code ?? this.code,
       barcode: barcode ?? this.barcode,
+      isbn: isbn ?? this.isbn,
       description: description ?? this.description,
       price: price ?? this.price,
       cost: cost ?? this.cost,
@@ -52,6 +56,7 @@ class Product {
     final map = <String, dynamic>{
       DatabaseConstants.colCode: code,
       DatabaseConstants.colBarcode: barcode,
+      DatabaseConstants.colIsbn: isbn,
       DatabaseConstants.colDescription: description,
       DatabaseConstants.colPrice: price,
       DatabaseConstants.colCost: cost,
@@ -70,6 +75,7 @@ class Product {
       id: map[DatabaseConstants.colId] as int?,
       code: (map[DatabaseConstants.colCode] as String?) ?? '',
       barcode: (map[DatabaseConstants.colBarcode] as String?) ?? '',
+      isbn: (map[DatabaseConstants.colIsbn] as String?) ?? '',
       description: (map[DatabaseConstants.colDescription] as String?) ?? '',
       price: ((map[DatabaseConstants.colPrice] as num?) ?? 0.0).toDouble(),
       cost: ((map[DatabaseConstants.colCost] as num?) ?? 0.0).toDouble(),
