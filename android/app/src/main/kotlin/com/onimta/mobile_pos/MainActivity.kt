@@ -15,9 +15,29 @@ class MainActivity : FlutterActivity() {
     private val PRINTER_CHANNEL = "com.onimta.mobile_pos/printer"
     private var toneGenerator: ToneGenerator? = null
 
+    private val isZ93Hardware by lazy {
+        android.os.Build.DISPLAY.contains("Z93", ignoreCase = true) ||
+        android.os.Build.MODEL.contains("Z93", ignoreCase = true) ||
+        android.os.Build.PRODUCT.contains("Z93", ignoreCase = true) ||
+        android.os.Build.FINGERPRINT.contains("Z93", ignoreCase = true)
+    }
+
+    private val isZ92Hardware by lazy {
+        !isZ93Hardware && (
+            android.os.Build.DISPLAY.contains("Z92", ignoreCase = true) ||
+            android.os.Build.MODEL.contains("Z92", ignoreCase = true) ||
+            android.os.Build.PRODUCT.contains("Z92", ignoreCase = true) ||
+            android.os.Build.MANUFACTURER.contains("ZCS", ignoreCase = true) ||
+            android.os.Build.BRAND.contains("ZCS", ignoreCase = true) ||
+            android.os.Build.FINGERPRINT.contains("Z92", ignoreCase = true)
+        )
+    }
+
     private var selectedDevice = "NEXGO_N5"
     private var nexgoPrinter: NexgoPrinterManager? = null
     private var wpos3Printer: Wpos3PrinterManager? = null
+    private var dblZ92Printer: Z92PrinterManager? = null
+    private var dblZ93Printer: Z93PrinterManager? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -38,6 +58,18 @@ class MainActivity : FlutterActivity() {
             wpos3Printer = Wpos3PrinterManager(applicationContext)
         } catch (e: Exception) {
             Log.w(TAG, "W-POS 3 printer init skipped/failed: ${e.message}")
+        }
+
+        try {
+            dblZ92Printer = Z92PrinterManager(applicationContext)
+        } catch (e: Exception) {
+            Log.w(TAG, "DBL Z92 printer init skipped/failed: ${e.message}")
+        }
+
+        try {
+            dblZ93Printer = Z93PrinterManager(applicationContext)
+        } catch (e: Exception) {
+            Log.w(TAG, "DBL Z93 printer init skipped/failed: ${e.message}")
         }
 
         // Feedback Channel
@@ -88,10 +120,17 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "isPrinterAvailable" -> {
-                    val available = when (selectedDevice) {
+                    val target = when {
+                        isZ93Hardware && selectedDevice != "WPOS_3" -> "DBL_Z93"
+                        isZ92Hardware && selectedDevice != "WPOS_3" -> "DBL_Z92"
+                        else -> selectedDevice
+                    }
+                    val available = when (target) {
+                        "DBL_Z93" -> dblZ93Printer?.isPrinterReady() ?: false
+                        "DBL_Z92" -> dblZ92Printer?.isPrinterReady() ?: false
                         "WPOS_3" -> wpos3Printer?.isPrinterReady() ?: false
                         "NEXGO_N5" -> nexgoPrinter?.isPrinterReady() ?: false
-                        else -> (nexgoPrinter?.isPrinterReady() == true) || (wpos3Printer?.isPrinterReady() == true)
+                        else -> (dblZ93Printer?.isPrinterReady() == true) || (dblZ92Printer?.isPrinterReady() == true) || (nexgoPrinter?.isPrinterReady() == true) || (wpos3Printer?.isPrinterReady() == true)
                     }
                     result.success(available)
                 }
@@ -102,33 +141,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Receipt data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    if (selectedDevice == "WPOS_3") {
-                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
-                        wp.printReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) result.success(true)
-                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
-                            }
-                        }
-                    } else {
-                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                        np.printReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) {
-                                    result.success(true)
-                                } else {
-                                    // Fallback to WPOS3 if Nexgo fails or isn't present
-                                    wpos3Printer?.printReceipt(arguments) { wSuccess, wMsg ->
-                                        runOnUiThread {
-                                            if (wSuccess) result.success(true)
-                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
-                                        }
-                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                                }
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printReceipt(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printReceipt(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printReceipt(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printReceipt(arguments, cb) }
+                    )
                 }
 
                 "printCashMovement" -> {
@@ -137,32 +156,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Cash movement data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    if (selectedDevice == "WPOS_3") {
-                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
-                        wp.printCashMovement(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) result.success(true)
-                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
-                            }
-                        }
-                    } else {
-                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                        np.printCashMovement(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) {
-                                    result.success(true)
-                                } else {
-                                    wpos3Printer?.printCashMovement(arguments) { wSuccess, wMsg ->
-                                        runOnUiThread {
-                                            if (wSuccess) result.success(true)
-                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
-                                        }
-                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                                }
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printCashMovement(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printCashMovement(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printCashMovement(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printCashMovement(arguments, cb) }
+                    )
                 }
 
                 "printShiftReport" -> {
@@ -171,32 +171,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Shift report data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    if (selectedDevice == "WPOS_3") {
-                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
-                        wp.printShiftReport(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) result.success(true)
-                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
-                            }
-                        }
-                    } else {
-                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                        np.printShiftReport(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) {
-                                    result.success(true)
-                                } else {
-                                    wpos3Printer?.printShiftReport(arguments) { wSuccess, wMsg ->
-                                        runOnUiThread {
-                                            if (wSuccess) result.success(true)
-                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
-                                        }
-                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                                }
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printShiftReport(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printShiftReport(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printShiftReport(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printShiftReport(arguments, cb) }
+                    )
                 }
 
                 "printExchangeReceipt" -> {
@@ -205,32 +186,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Exchange data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    if (selectedDevice == "WPOS_3") {
-                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
-                        wp.printExchangeReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) result.success(true)
-                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
-                            }
-                        }
-                    } else {
-                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                        np.printExchangeReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) {
-                                    result.success(true)
-                                } else {
-                                    wpos3Printer?.printExchangeReceipt(arguments) { wSuccess, wMsg ->
-                                        runOnUiThread {
-                                            if (wSuccess) result.success(true)
-                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
-                                        }
-                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                                }
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printExchangeReceipt(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printExchangeReceipt(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printExchangeReceipt(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printExchangeReceipt(arguments, cb) }
+                    )
                 }
 
                 "printReturnReceipt" -> {
@@ -239,32 +201,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Return data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    if (selectedDevice == "WPOS_3") {
-                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
-                        wp.printReturnReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) result.success(true)
-                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
-                            }
-                        }
-                    } else {
-                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                        np.printReturnReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) {
-                                    result.success(true)
-                                } else {
-                                    wpos3Printer?.printReturnReceipt(arguments) { wSuccess, wMsg ->
-                                        runOnUiThread {
-                                            if (wSuccess) result.success(true)
-                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
-                                        }
-                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                                }
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printReturnReceipt(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printReturnReceipt(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printReturnReceipt(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printReturnReceipt(arguments, cb) }
+                    )
                 }
 
                 "printItemWiseSalesReport" -> {
@@ -273,17 +216,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Report data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                    np.printItemWiseSalesReport(arguments) { success, errorMsg ->
-                        runOnUiThread {
-                            if (success) {
-                                result.success(true)
-                            } else {
-                                result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printItemWiseSalesReport(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printItemWiseSalesReport(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printItemWiseSalesReport(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printItemWiseSalesReport(arguments, cb) }
+                    )
                 }
 
                 "printTotalSalesReport" -> {
@@ -292,17 +231,13 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Report data cannot be null", null)
                         return@setMethodCallHandler
                     }
-
-                    val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                    np.printTotalSalesReport(arguments) { success, errorMsg ->
-                        runOnUiThread {
-                            if (success) {
-                                result.success(true)
-                            } else {
-                                result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
-                            }
-                        }
-                    }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printTotalSalesReport(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printTotalSalesReport(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printTotalSalesReport(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printTotalSalesReport(arguments, cb) }
+                    )
                 }
 
                 "printHoldReceipt" -> {
@@ -311,35 +246,137 @@ class MainActivity : FlutterActivity() {
                         result.error("INVALID_ARGS", "Hold receipt data cannot be null", null)
                         return@setMethodCallHandler
                     }
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printHoldReceipt(arguments, cb) },
+                        printOnZ92 = { p, cb -> p.printHoldReceipt(arguments, cb) },
+                        printOnWpos3 = { p, cb -> p.printHoldReceipt(arguments, cb) },
+                        printOnNexgo = { p, cb -> p.printHoldReceipt(arguments, cb) }
+                    )
+                }
 
-                    if (selectedDevice == "WPOS_3") {
-                        val wp = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
-                        wp.printHoldReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) result.success(true)
-                                else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
-                            }
-                        }
-                    } else {
-                        val np = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
-                        np.printHoldReceipt(arguments) { success, errorMsg ->
-                            runOnUiThread {
-                                if (success) {
-                                    result.success(true)
-                                } else {
-                                    wpos3Printer?.printHoldReceipt(arguments) { wSuccess, wMsg ->
-                                        runOnUiThread {
-                                            if (wSuccess) result.success(true)
-                                            else result.error("PRINT_FAILED", errorMsg ?: wMsg ?: "Print error", null)
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun executePrint(
+        result: MethodChannel.Result,
+        printOnZ93: (Z93PrinterManager, (Boolean, String?) -> Unit) -> Unit,
+        printOnZ92: (Z92PrinterManager, (Boolean, String?) -> Unit) -> Unit,
+        printOnWpos3: (Wpos3PrinterManager, (Boolean, String?) -> Unit) -> Unit,
+        printOnNexgo: (NexgoPrinterManager, (Boolean, String?) -> Unit) -> Unit
+    ) {
+        val z93 = dblZ93Printer ?: Z93PrinterManager(applicationContext).also { dblZ93Printer = it }
+        val z92 = dblZ92Printer ?: Z92PrinterManager(applicationContext).also { dblZ92Printer = it }
+        val wpos = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
+        val nexgo = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
+
+        val targetDevice = when {
+            isZ93Hardware && selectedDevice != "WPOS_3" -> "DBL_Z93"
+            isZ92Hardware && selectedDevice != "WPOS_3" -> "DBL_Z92"
+            else -> selectedDevice
+        }
+
+        when (targetDevice) {
+            "DBL_Z93" -> {
+                printOnZ93(z93) { success, errorMsg ->
+                    runOnUiThread {
+                        if (success) result.success(true)
+                        else result.error("PRINT_FAILED", errorMsg ?: "DBL Z93 print failed", null)
+                    }
+                }
+            }
+            "DBL_Z92" -> {
+                printOnZ92(z92) { success, errorMsg ->
+                    runOnUiThread {
+                        if (success) result.success(true)
+                        else result.error("PRINT_FAILED", errorMsg ?: "DBL Z92 print failed", null)
+                    }
+                }
+            }
+            "WPOS_3" -> {
+                printOnWpos3(wpos) { success, errorMsg ->
+                    runOnUiThread {
+                        if (success) result.success(true)
+                        else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
+                    }
+                }
+            }
+            "NEXGO_N5" -> {
+                printOnNexgo(nexgo) { success, errorMsg ->
+                    runOnUiThread {
+                        if (success) {
+                            result.success(true)
+                        } else {
+                            // Fallback to DBL Z93/Z92, then WPOS 3
+                            val fallback = if (z93.isPrinterReady()) {
+                                printOnZ93(z93) { zSuccess, zMsg ->
+                                    if (zSuccess) runOnUiThread { result.success(true) }
+                                    else runOnUiThread { result.error("PRINT_FAILED", errorMsg ?: zMsg ?: "Print error", null) }
+                                }
+                            } else {
+                                printOnZ92(z92) { zSuccess, zMsg ->
+                                    if (zSuccess) {
+                                        runOnUiThread { result.success(true) }
+                                    } else {
+                                        printOnWpos3(wpos) { wSuccess, wMsg ->
+                                            runOnUiThread {
+                                                if (wSuccess) result.success(true)
+                                                else result.error("PRINT_FAILED", errorMsg ?: zMsg ?: wMsg ?: "Print error", null)
+                                            }
                                         }
-                                    } ?: result.error("PRINT_FAILED", errorMsg ?: "Unknown error", null)
+                                    }
                                 }
                             }
                         }
                     }
                 }
-
-                else -> result.notImplemented()
+            }
+            else -> { // AUTO mode
+                if (z93.isPrinterReady()) {
+                    printOnZ93(z93) { success, errorMsg ->
+                        runOnUiThread {
+                            if (success) result.success(true)
+                            else result.error("PRINT_FAILED", errorMsg ?: "DBL Z93 print failed", null)
+                        }
+                    }
+                } else if (z92.isPrinterReady()) {
+                    printOnZ92(z92) { success, errorMsg ->
+                        runOnUiThread {
+                            if (success) result.success(true)
+                            else result.error("PRINT_FAILED", errorMsg ?: "DBL Z92 print failed", null)
+                        }
+                    }
+                } else if (wpos.isPrinterReady()) {
+                    printOnWpos3(wpos) { success, errorMsg ->
+                        runOnUiThread {
+                            if (success) result.success(true)
+                            else result.error("PRINT_FAILED", errorMsg ?: "W-POS 3 print failed", null)
+                        }
+                    }
+                } else {
+                    printOnNexgo(nexgo) { success, errorMsg ->
+                        runOnUiThread {
+                            if (success) {
+                                result.success(true)
+                            } else {
+                                printOnZ93(z93) { zSuccess, zMsg ->
+                                    if (zSuccess) {
+                                        runOnUiThread { result.success(true) }
+                                    } else {
+                                        printOnZ92(z92) { z2Success, z2Msg ->
+                                            runOnUiThread {
+                                                if (z2Success) result.success(true)
+                                                else result.error("PRINT_FAILED", errorMsg ?: zMsg ?: z2Msg ?: "Print failed", null)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

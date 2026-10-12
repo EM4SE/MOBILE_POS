@@ -105,43 +105,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (_, setModalState) => AlertDialog(
           title: const Text('Printer Configuration'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Select Printer Model / Protocol:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: AppDimensions.sm),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                value: printerType,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'Thermal 80mm', child: Text('Thermal Receipt 80mm (ESC/POS)')),
-                  DropdownMenuItem(value: 'Thermal 58mm', child: Text('Thermal Receipt 58mm (ESC/POS)')),
-                  DropdownMenuItem(value: 'Bluetooth POS', child: Text('Bluetooth Mobile Printer')),
-                  DropdownMenuItem(value: 'Network LAN', child: Text('Network LAN / Ethernet Printer')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setModalState(() => printerType = val);
-                },
-              ),
-              const SizedBox(height: AppDimensions.md),
-              AppTextField(
-                controller: ipCtrl,
-                label: 'Printer IP / Port Address',
-                hintText: '192.168.1.100:9100',
-              ),
-              const SizedBox(height: AppDimensions.md),
-              Center(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.print, size: 18),
-                  label: const Text('Test Print Slip'),
-                  onPressed: () {
-                    AppDialog.showSnackBar(context, 'Test slip queued to $printerType at ${ipCtrl.text}');
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Select Printer Model / Protocol:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: AppDimensions.sm),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  value: printerType,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'Thermal 80mm', child: Text('Thermal Receipt 80mm (ESC/POS)')),
+                    DropdownMenuItem(value: 'Thermal 58mm', child: Text('Thermal Receipt 58mm (ESC/POS)')),
+                    DropdownMenuItem(value: 'Bluetooth POS', child: Text('Bluetooth Mobile Printer')),
+                    DropdownMenuItem(value: 'Network LAN', child: Text('Network LAN / Ethernet Printer')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => printerType = val);
                   },
                 ),
-              ),
-            ],
+                const SizedBox(height: AppDimensions.md),
+                AppTextField(
+                  controller: ipCtrl,
+                  label: 'Printer IP / Port Address',
+                  hintText: '192.168.1.100:9100',
+                ),
+                const SizedBox(height: AppDimensions.md),
+                Center(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.print, size: 18),
+                    label: const Text('Test Print Slip'),
+                    onPressed: () {
+                      AppDialog.showSnackBar(context, 'Test slip queued to $printerType at ${ipCtrl.text}');
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             AppButton(
@@ -187,111 +189,163 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text('Select POS Device / SDK', style: TextStyle(fontSize: 16)),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Choose your active Android POS terminal model to use its integrated thermal printer SDK:',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: AppDimensions.md),
-
-              // Option 1: NEXGO N5
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: selected == 'NEXGO_N5' ? AppColors.primary : AppColors.border,
-                    width: selected == 'NEXGO_N5' ? 2 : 1,
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Choose your active Android POS terminal model to use its integrated thermal printer SDK:',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
-                  borderRadius: BorderRadius.circular(4),
-                  color: selected == 'NEXGO_N5' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
-                ),
-                child: RadioListTile<String>(
-                  value: 'NEXGO_N5',
-                  groupValue: selected,
-                  dense: true,
-                  title: const Text('NEXGO N5 Smart POS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                  subtitle: const Text('Nexgo Handheld POS with Built-in 58mm Thermal Printer SDK', style: TextStyle(fontSize: 11)),
-                  onChanged: (val) {
-                    if (val != null) setModalState(() => selected = val);
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // Option 2: W-POS 3
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: selected == 'WPOS_3' ? AppColors.primary : AppColors.border,
-                    width: selected == 'WPOS_3' ? 2 : 1,
+                  const SizedBox(height: 10),
+                  // Option 0: DBL Z93 Smart POS (80mm)
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: selected == 'DBL_Z93' ? AppColors.primary : AppColors.border,
+                        width: selected == 'DBL_Z93' ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      color: selected == 'DBL_Z93' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                    ),
+                    child: RadioListTile<String>(
+                      value: 'DBL_Z93',
+                      groupValue: selected,
+                      dense: true,
+                      title: const Text('DBL Z93 Smart POS (80mm)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                      subtitle: const Text('DBL / ZCS Z93 Handheld with Inbuilt 80mm Thermal Printer (576 dots)', style: TextStyle(fontSize: 11)),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selected = val);
+                      },
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(4),
-                  color: selected == 'WPOS_3' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
-                ),
-                child: RadioListTile<String>(
-                  value: 'WPOS_3',
-                  groupValue: selected,
-                  dense: true,
-                  title: const Text('W-POS 3 Terminal (Wiseasy)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                  subtitle: const Text('Wiseasy / WangPOS W-POS 3 Handheld with Inbuilt 58mm Printer SDK', style: TextStyle(fontSize: 11)),
-                  onChanged: (val) {
-                    if (val != null) setModalState(() => selected = val);
-                  },
-                ),
-              ),
 
-              const SizedBox(height: 8),
+                  const SizedBox(height: 8),
 
-              // Option 3: Auto Detect
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: selected == 'AUTO' ? AppColors.primary : AppColors.border,
-                    width: selected == 'AUTO' ? 2 : 1,
+                  // Option 1: DBL Z92 Smart POS
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: selected == 'DBL_Z92' ? AppColors.primary : AppColors.border,
+                        width: selected == 'DBL_Z92' ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      color: selected == 'DBL_Z92' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                    ),
+                    child: RadioListTile<String>(
+                      value: 'DBL_Z92',
+                      groupValue: selected,
+                      dense: true,
+                      title: const Text('DBL Z92 Smart POS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                      subtitle: const Text('DBL / ZCS Z92 Handheld with Inbuilt 58mm Thermal Printer SDK', style: TextStyle(fontSize: 11)),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selected = val);
+                      },
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(4),
-                  color: selected == 'AUTO' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
-                ),
-                child: RadioListTile<String>(
-                  value: 'AUTO',
-                  groupValue: selected,
-                  dense: true,
-                  title: const Text('Auto-Detect Hardware', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                  subtitle: const Text('Automatically detects active printer service on startup', style: TextStyle(fontSize: 11)),
-                  onChanged: (val) {
-                    if (val != null) setModalState(() => selected = val);
-                  },
-                ),
-              ),
 
-              const SizedBox(height: AppDimensions.md),
+                  const SizedBox(height: 8),
 
-              Center(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.print, size: 18),
-                  label: const Text('Test Cash Movement Receipt'),
-                  onPressed: () async {
-                    await PrinterService.setSelectedDevice(selected);
-                    final res = await PrinterService.printCashMovementReceipt(
-                      isPaidIn: true,
-                      amount: 100.0,
-                      reason: 'Device Printer Test',
-                    );
-                    if (mounted) {
-                      AppDialog.showSnackBar(
-                        context,
-                        res.success
-                            ? 'Test print sent successfully to $selected'
-                            : 'Test print returned: ${res.message ?? "Offline / Paper Out"}',
-                      );
-                    }
-                  },
-                ),
+                  // Option 2: NEXGO N5
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: selected == 'NEXGO_N5' ? AppColors.primary : AppColors.border,
+                        width: selected == 'NEXGO_N5' ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      color: selected == 'NEXGO_N5' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                    ),
+                    child: RadioListTile<String>(
+                      value: 'NEXGO_N5',
+                      groupValue: selected,
+                      dense: true,
+                      title: const Text('NEXGO N5 Smart POS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                      subtitle: const Text('Nexgo Handheld POS with Built-in 58mm Thermal Printer SDK', style: TextStyle(fontSize: 11)),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selected = val);
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Option 3: W-POS 3
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: selected == 'WPOS_3' ? AppColors.primary : AppColors.border,
+                        width: selected == 'WPOS_3' ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      color: selected == 'WPOS_3' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                    ),
+                    child: RadioListTile<String>(
+                      value: 'WPOS_3',
+                      groupValue: selected,
+                      dense: true,
+                      title: const Text('W-POS 3 Terminal (Wiseasy)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                      subtitle: const Text('Wiseasy / WangPOS W-POS 3 Handheld with Inbuilt 58mm Printer SDK', style: TextStyle(fontSize: 11)),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selected = val);
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Option 3: Auto Detect
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: selected == 'AUTO' ? AppColors.primary : AppColors.border,
+                        width: selected == 'AUTO' ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      color: selected == 'AUTO' ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                    ),
+                    child: RadioListTile<String>(
+                      value: 'AUTO',
+                      groupValue: selected,
+                      dense: true,
+                      title: const Text('Auto-Detect Hardware', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                      subtitle: const Text('Automatically detects active printer service on startup', style: TextStyle(fontSize: 11)),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selected = val);
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: AppDimensions.md),
+
+                  Center(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.print, size: 18),
+                      label: const Text('Test Cash Movement Receipt'),
+                      onPressed: () async {
+                        await PrinterService.setSelectedDevice(selected);
+                        final res = await PrinterService.printCashMovementReceipt(
+                          isPaidIn: true,
+                          amount: 100.0,
+                          reason: 'Device Printer Test',
+                        );
+                        if (mounted) {
+                          AppDialog.showSnackBar(
+                            context,
+                            res.success
+                                ? 'Test print sent successfully to $selected'
+                                : 'Test print returned: ${res.message ?? "Offline / Paper Out"}',
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           actions: [
             AppButton(
@@ -309,7 +363,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await PrinterService.setSelectedDevice(selected);
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
-                  final name = selected == 'WPOS_3' ? 'W-POS 3 (Wiseasy)' : (selected == 'NEXGO_N5' ? 'NEXGO N5' : 'Auto Detect');
+                  final name = selected == 'DBL_Z93'
+                      ? 'DBL Z93 Smart POS (80mm)'
+                      : (selected == 'DBL_Z92'
+                          ? 'DBL Z92 Smart POS'
+                          : (selected == 'WPOS_3'
+                              ? 'W-POS 3 (Wiseasy)'
+                              : (selected == 'NEXGO_N5' ? 'NEXGO N5' : 'Auto Detect')));
                   AppDialog.showSnackBar(context, 'POS Hardware set to $name');
                 }
               },
@@ -395,21 +455,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('POS Billing Preferences'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(
-              controller: taxCtrl,
-              label: 'Default Tax Rate % (e.g. 0.0 or 0.08 for 8%)',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: AppDimensions.md),
-            AppTextField(
-              controller: prefixCtrl,
-              label: 'Invoice Number Prefix',
-              hintText: 'INV-',
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppTextField(
+                controller: taxCtrl,
+                label: 'Default Tax Rate % (e.g. 0.0 or 0.08 for 8%)',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: AppDimensions.md),
+              AppTextField(
+                controller: prefixCtrl,
+                label: 'Invoice Number Prefix',
+                hintText: 'INV-',
+              ),
+            ],
+          ),
         ),
         actions: [
           AppButton(
@@ -497,10 +559,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentDevice = widget.controller.selectedDevice;
-    final deviceLabel = currentDevice == 'WPOS_3'
-        ? 'W-POS 3 (Wiseasy SDK)'
-        : (currentDevice == 'NEXGO_N5' ? 'NEXGO N5 (Nexgo SDK)' : 'Auto Detect');
+    final deviceLabel = widget.controller.selectedDeviceDisplayName;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -523,7 +582,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // Device Hardware Selection Tile
               SettingsTile(
                 title: 'POS Hardware & Printer SDK',
-                description: 'Active Device: $deviceLabel (Tap to switch NEXGO N5 / W-POS 3)',
+                description: 'Active Device: $deviceLabel (Tap to switch DBL Z92 / NEXGO N5 / W-POS 3)',
                 icon: Icons.point_of_sale,
                 iconColor: const Color(0xFF0284C7),
                 onTap: _showDeviceSelectionDialog,

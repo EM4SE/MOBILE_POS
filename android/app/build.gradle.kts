@@ -33,7 +33,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "armeabi"))
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
         }
     }
 
@@ -61,4 +61,5 @@ flutter {
 
 dependencies {
     implementation("com.google.zxing:core:3.5.3")
+    implementation(files("libs/SmartPos_1.6.1_R221020.jar"))
 }

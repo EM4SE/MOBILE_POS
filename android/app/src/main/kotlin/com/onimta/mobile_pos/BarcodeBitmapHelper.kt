@@ -31,8 +31,12 @@ object BarcodeBitmapHelper {
             val rawMatrix = writer.encode(content, BarcodeFormat.CODE_128, 0, 0, hints)
             val moduleCount = rawMatrix.width
 
-            // Determine integer scale factor (2px per module for codes <= 170 modules, 1px otherwise)
-            val scale = if (moduleCount * 2 <= maxWidth - 24) 2 else 1
+            // Determine integer scale factor (up to 3px per module on 80mm / 576-dot printers)
+            val scale = when {
+                moduleCount * 3 <= maxWidth - 24 -> 3
+                moduleCount * 2 <= maxWidth - 24 -> 2
+                else -> 1
+            }
             val barcodeWidth = moduleCount * scale
             val totalWidth = maxWidth.coerceAtLeast(barcodeWidth + 24)
             val leftMargin = (totalWidth - barcodeWidth) / 2

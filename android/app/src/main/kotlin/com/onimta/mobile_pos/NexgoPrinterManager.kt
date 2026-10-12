@@ -182,7 +182,7 @@ class NexgoPrinterManager(private val context: Context) {
             val dateStr = receiptData["dateTime"] as? String ?: ""
 
             printLine(appName, 28, alignCenter, true)
-            printLine("TAX INVOICE RECEIPT", 20, alignCenter, false)
+            printLine("ORDER INVOICE", 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
             printTwoCols("Invoice #:", invoiceNo, 22, true)

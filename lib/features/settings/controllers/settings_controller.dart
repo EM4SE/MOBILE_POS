@@ -25,6 +25,22 @@ class SettingsController extends ChangeNotifier {
   String get printerIp => _settings['printer_ip'] ?? '192.168.1.100';
   String get invoicePrefix => _settings['invoice_prefix'] ?? 'INV-';
   String get selectedDevice => _settings['selected_device'] ?? 'NEXGO_N5';
+  String get selectedDeviceDisplayName {
+    switch (selectedDevice) {
+      case 'DBL_Z93':
+        return 'DBL Z93 Smart POS (80mm Printer)';
+      case 'DBL_Z92':
+        return 'DBL Z92 Smart POS (ZCS SDK)';
+      case 'WPOS_3':
+        return 'W-POS 3 (Wiseasy SDK)';
+      case 'NEXGO_N5':
+        return 'NEXGO N5 (Nexgo SDK)';
+      case 'AUTO':
+        return 'Auto-Detect Hardware';
+      default:
+        return selectedDevice;
+    }
+  }
 
   Future<void> loadSettings() async {
     _isLoading = true;

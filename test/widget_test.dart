@@ -53,7 +53,9 @@ class FakeProductRepository implements ProductRepository {
   @override
   Future<int> countProducts({String? searchQuery, bool onlyActive = true}) async => 0;
   @override
-  Future<int> syncProductsFromApi({String? baseUrl}) async => 0;
+  Future<int> syncProductsFromApi({String? baseUrl, void Function(int, String)? onProgress}) async => 0;
+  @override
+  Future<int> syncQuickProductsFromApi({String? baseUrl, void Function(int, String)? onProgress}) async => 0;
   @override
   Future<Product?> fetchAndCacheProductByCode(String code, {String? baseUrl}) async => null;
 }

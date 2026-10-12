@@ -75,13 +75,20 @@ class AppButton extends StatelessWidget {
                 Icon(icon, size: 18, color: fg),
                 const SizedBox(width: AppDimensions.sm),
               ],
-              Text(
-                label,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: fontSize,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -103,7 +110,7 @@ class AppButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppDimensions.radiusXs),
           child: Container(
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.md),
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.sm),
             child: buttonChild,
           ),
         ),

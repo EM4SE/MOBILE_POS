@@ -52,6 +52,14 @@
         <package android:name="com.wiseasy.printer"/>
         <package android:name="com.nexgo.smartpos"/>
         <package android:name="com.nexgo.oaf.apiv3"/>
+        <package android:name="com.zcs.sdk"/>
+        <package android:name="com.zcs.smartpos"/>
+        <package android:name="com.szzcs.smartpos"/>
+        <package android:name="com.zcs.printer"/>
+        <package android:name="com.zcs.zcshardwaremanager"/>
+        <package android:name="com.zcs.zsf"/>
+        <package android:name="com.zcs.customized"/>
+        <package android:name="com.z92posprinter.posz92printer"/>
         <intent>
             <action android:name="wangpos.sdk4.libbasebinder.CoreService"/>
         </intent>

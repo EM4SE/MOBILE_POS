@@ -1286,4 +1286,290 @@ class Wpos3PrinterManager(private val context: Context) {
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
     }
+
+    fun printItemWiseSalesReport(
+        reportData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        Thread {
+            try {
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
+                }
+                val target = printerInstance ?: printerServiceBinder
+                if (target != null) {
+                    val targetClass = target.javaClass
+                    cacheMethods(targetClass)
+                    try {
+                        printInitMethod?.invoke(target)
+                        clearCacheMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    val bitmap = renderItemWiseReportBitmap(reportData)
+                    if (printPictureMethod != null) {
+                        try {
+                            val params = printPictureMethod!!.parameterTypes
+                            if (params.size == 1 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap)
+                            } else if (params.size == 2 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap, 1)
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                    try {
+                        printPaperMethod?.invoke(target, 4)
+                        printFinishMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+                    onComplete(true, null)
+                } else {
+                    onComplete(false, "W-POS 3 printer service not connected")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error printing item-wise sales report on W-POS 3: ${e.message}", e)
+                onComplete(false, "W-POS 3 print error: ${e.message}")
+            }
+        }.start()
+    }
+
+    fun printTotalSalesReport(
+        reportData: Map<String, Any?>,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        Thread {
+            try {
+                if (!waitForPrinterReady()) {
+                    onComplete(false, "W-POS 3 printer service is connecting or not installed on this terminal")
+                    return@Thread
+                }
+                val target = printerInstance ?: printerServiceBinder
+                if (target != null) {
+                    val targetClass = target.javaClass
+                    cacheMethods(targetClass)
+                    try {
+                        printInitMethod?.invoke(target)
+                        clearCacheMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+
+                    val bitmap = renderTotalSalesReportBitmap(reportData)
+                    if (printPictureMethod != null) {
+                        try {
+                            val params = printPictureMethod!!.parameterTypes
+                            if (params.size == 1 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap)
+                            } else if (params.size == 2 && params[0] == Bitmap::class.java) {
+                                printPictureMethod!!.invoke(target, bitmap, 1)
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                    try {
+                        printPaperMethod?.invoke(target, 4)
+                        printFinishMethod?.invoke(target)
+                    } catch (_: Throwable) {}
+                    onComplete(true, null)
+                } else {
+                    onComplete(false, "W-POS 3 printer service not connected")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error printing total sales report on W-POS 3: ${e.message}", e)
+                onComplete(false, "W-POS 3 print error: ${e.message}")
+            }
+        }.start()
+    }
+
+    private fun renderItemWiseReportBitmap(reportData: Map<String, Any?>): Bitmap {
+        val width = 384
+        val items = reportData["items"] as? List<Map<String, Any?>> ?: emptyList()
+        val estimatedHeight = 450 + (items.size * 55)
+        val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val paint = Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
+        var y = 35f
+
+        fun drawCenter(text: String, size: Float, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, width / 2f, y, paint)
+            y += size + 8f
+        }
+
+        fun drawDivider(dotted: Boolean = true) {
+            paint.textSize = 16f
+            paint.typeface = Typeface.MONOSPACE
+            paint.textAlign = Paint.Align.CENTER
+            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
+            canvas.drawText(line, width / 2f, y, paint)
+            y += 22f
+        }
+
+        fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(left, 14f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(right, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = reportData["appName"] as? String ?: "ONIMTA POS"
+        val title = reportData["title"] as? String ?: "ITEM-WISE SALES REPORT"
+        val period = reportData["period"] as? String ?: "Today"
+        val cashier = reportData["cashierName"] as? String ?: "Admin"
+        val dateTime = reportData["dateTime"] as? String ?: ""
+        val totalQty = reportData["totalQuantity"] as? String ?: "0"
+        val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
+
+        drawCenter(appName, 26f, true)
+        drawCenter(title, 20f, true)
+        drawDivider(false)
+
+        drawTwoCols("Period:", period, 18f, false)
+        drawTwoCols("Cashier:", cashier, 18f, false)
+        if (dateTime.isNotEmpty()) drawTwoCols("Date & Time:", dateTime, 18f, false)
+        drawDivider(true)
+
+        paint.textSize = 18f
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.textAlign = Paint.Align.LEFT
+        canvas.drawText("ITEM DESCRIPTION", 14f, y, paint)
+        y += 22f
+        drawTwoCols("  SOLD QTY", "TOTAL AMOUNT", 18f, true)
+        drawDivider(true)
+
+        var rank = 1
+        for (item in items) {
+            val desc = item["description"] as? String ?: ""
+            val qty = item["qty"] as? String ?: "0"
+            val total = item["total"] as? String ?: "LKR 0.00"
+
+            paint.textSize = 19f
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText("$rank. $desc", 14f, y, paint)
+            y += 24f
+
+            drawTwoCols("   Qty: $qty", total, 18f, false)
+            rank++
+        }
+
+        drawDivider(false)
+        drawTwoCols("TOTAL ITEMS SOLD:", totalQty, 20f, true)
+        drawTwoCols("TOTAL REVENUE:", totalRevenue, 24f, true)
+        drawDivider(false)
+        y += 20f
+
+        return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
+    }
+
+    private fun renderTotalSalesReportBitmap(reportData: Map<String, Any?>): Bitmap {
+        val width = 384
+        val estimatedHeight = 650
+        val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val paint = Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
+        var y = 35f
+
+        fun drawCenter(text: String, size: Float, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, width / 2f, y, paint)
+            y += size + 8f
+        }
+
+        fun drawDivider(dotted: Boolean = true) {
+            paint.textSize = 16f
+            paint.typeface = Typeface.MONOSPACE
+            paint.textAlign = Paint.Align.CENTER
+            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
+            canvas.drawText(line, width / 2f, y, paint)
+            y += 22f
+        }
+
+        fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(left, 14f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(right, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = reportData["appName"] as? String ?: "ONIMTA POS"
+        val title = reportData["title"] as? String ?: "TOTAL SALES REPORT"
+        val period = reportData["period"] as? String ?: "Today"
+        val cashier = reportData["cashierName"] as? String ?: "Admin"
+        val dateTime = reportData["dateTime"] as? String ?: ""
+
+        val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
+        val grossSales = reportData["grossSales"] as? String ?: "LKR 0.00"
+        val discount = reportData["discount"] as? String ?: "LKR 0.00"
+        val tax = reportData["tax"] as? String ?: "LKR 0.00"
+        val netSales = reportData["netSales"] as? String ?: "LKR 0.00"
+
+        val returnsCount = reportData["returnsCount"] as? String ?: "0"
+        val returnsAmount = reportData["returnsAmount"] as? String ?: "LKR 0.00"
+        val totalNetRevenue = reportData["totalNetRevenue"] as? String ?: "LKR 0.00"
+
+        val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+        val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
+        val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
+        val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
+
+        drawCenter(appName, 28f, true)
+        drawCenter(title, 22f, true)
+        drawDivider(false)
+
+        drawTwoCols("Period:", period, 18f, false)
+        drawTwoCols("Cashier:", cashier, 18f, false)
+        if (dateTime.isNotEmpty()) drawTwoCols("Date:", dateTime, 18f, false)
+        drawDivider(true)
+
+        paint.textSize = 18f
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.textAlign = Paint.Align.LEFT
+        canvas.drawText("SALES SUMMARY", 14f, y, paint)
+        y += 24f
+
+        drawTwoCols("Total Invoices:", totalInvoices, 18f, false)
+        drawTwoCols("Gross Sales:", grossSales, 18f, false)
+        if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("Discounts:", "-$discount", 18f, false)
+        if (tax.isNotEmpty() && tax != "LKR 0.00") drawTwoCols("Tax:", tax, 18f, false)
+        drawDivider(true)
+        drawTwoCols("Net Sales:", netSales, 20f, true)
+        if (returnsCount != "0") drawTwoCols("Returns ($returnsCount bills):", "-$returnsAmount", 18f, false)
+        drawDivider(false)
+        drawTwoCols("TOTAL NET REVENUE:", totalNetRevenue, 24f, true)
+        drawDivider(false)
+
+        paint.textSize = 18f
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.textAlign = Paint.Align.LEFT
+        canvas.drawText("PAYMENTS / TENDER BREAKDOWN", 14f, y, paint)
+        y += 24f
+
+        drawTwoCols("Cash Sales:", cashSales, 18f, false)
+        drawTwoCols("Card Sales:", cardSales, 18f, false)
+        if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) drawTwoCols("QR / Online:", qrSales, 18f, false)
+        if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) drawTwoCols("Credit Sales:", creditSales, 18f, false)
+        drawDivider(false)
+        y += 20f
+
+        return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
+    }
 }
