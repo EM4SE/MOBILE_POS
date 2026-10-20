@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../datasources/local/product_local_datasource.dart';
 import '../datasources/remote/product_remote_datasource.dart';
 import '../models/product_model.dart';
+import 'sync_log_repository.dart';
 
 abstract class ProductRepository {
   Future<List<Product>> getProducts({String? searchQuery, bool onlyActive = true, int? limit, int? offset});
@@ -29,10 +30,12 @@ abstract class ProductRepository {
 class ProductRepositoryImpl implements ProductRepository {
   final ProductLocalDataSource _localDataSource;
   final ProductRemoteDataSource _remoteDataSource;
+  final SyncLogRepository? _syncLogRepository;
 
   ProductRepositoryImpl(
     this._localDataSource, [
     ProductRemoteDataSource? remoteDataSource,
+    this._syncLogRepository,
   ]) : _remoteDataSource = remoteDataSource ?? ProductRemoteDataSourceImpl();
 
   @override
@@ -111,9 +114,25 @@ class ProductRepositoryImpl implements ProductRepository {
       onProgress?.call(remoteProducts.length, 'Saving ${remoteProducts.length} items to SQLite...');
       await _localDataSource.insertProducts(remoteProducts);
       debugPrint('ProductRepository: Saved ${remoteProducts.length} products to SQLite');
+
+      await _syncLogRepository?.logAction(
+        actionType: 'PRODUCT_SYNC',
+        title: 'Product Catalog Synced',
+        details: 'Downloaded and saved ${remoteProducts.length} products into SQLite',
+        status: 'SUCCESS',
+      );
+
       return remoteProducts.length;
     } catch (e) {
       debugPrint('ProductRepository sync error: $e');
+
+      await _syncLogRepository?.logAction(
+        actionType: 'PRODUCT_SYNC',
+        title: 'Product Catalog Sync Failed',
+        status: 'FAILED',
+        errorMessage: e.toString(),
+      );
+
       return 0;
     }
   }
@@ -126,9 +145,25 @@ class ProductRepositoryImpl implements ProductRepository {
 
       await _localDataSource.insertProducts(remoteProducts);
       debugPrint('ProductRepository: Fast synced ${remoteProducts.length} products to SQLite');
+
+      await _syncLogRepository?.logAction(
+        actionType: 'PRODUCT_SYNC',
+        title: 'Quick Catalog Synced',
+        details: 'Fast synced ${remoteProducts.length} products into SQLite',
+        status: 'SUCCESS',
+      );
+
       return remoteProducts.length;
     } catch (e) {
       debugPrint('ProductRepository quick sync error: $e');
+
+      await _syncLogRepository?.logAction(
+        actionType: 'PRODUCT_SYNC',
+        title: 'Quick Catalog Sync Failed',
+        status: 'FAILED',
+        errorMessage: e.toString(),
+      );
+
       return 0;
     }
   }

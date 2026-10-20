@@ -4,6 +4,7 @@ import 'app/app.dart';
 import 'app/routes/route_generator.dart';
 import 'core/database/database_helper.dart';
 import 'core/database/database_initializer.dart';
+import 'core/services/api_service.dart';
 import 'core/services/authentication_service.dart';
 import 'core/services/database_service.dart';
 import 'data/datasources/local/customer_local_datasource.dart';
@@ -12,13 +13,19 @@ import 'data/datasources/local/product_local_datasource.dart';
 import 'data/datasources/local/sales_local_datasource.dart';
 import 'data/datasources/local/settings_local_datasource.dart';
 import 'data/datasources/local/shift_local_datasource.dart';
+import 'data/datasources/local/sync_log_local_datasource.dart';
 import 'data/datasources/local/user_local_datasource.dart';
+import 'data/datasources/remote/bill_sync_remote_datasource.dart';
+import 'data/datasources/remote/payment_remote_datasource.dart';
+import 'data/repositories/bill_sync_repository.dart';
 import 'data/repositories/customer_repository.dart';
 import 'data/repositories/exchange_repository.dart';
+import 'data/repositories/payment_type_repository.dart';
 import 'data/repositories/product_repository.dart';
 import 'data/repositories/sales_repository.dart';
 import 'data/repositories/settings_repository.dart';
 import 'data/repositories/shift_repository.dart';
+import 'data/repositories/sync_log_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'core/services/shift_service.dart';
 import 'features/authentication/controllers/login_controller.dart';
@@ -45,6 +52,7 @@ void main() async {
 
   // 1. Service Layer
   final DatabaseService databaseService = DatabaseServiceImpl(DatabaseHelper.instance);
+  final ApiService apiService = ApiService();
 
   // 2. Data Source Layer
   final UserLocalDataSource userLocalDataSource = UserLocalDataSourceImpl(databaseService);
@@ -54,15 +62,38 @@ void main() async {
   final SettingsLocalDataSource settingsLocalDataSource = SettingsLocalDataSourceImpl(databaseService);
   final ShiftLocalDatasource shiftLocalDatasource = ShiftLocalDatasource(DatabaseHelper.instance);
   final ExchangeLocalDataSource exchangeLocalDataSource = ExchangeLocalDataSourceImpl(databaseService);
+  final SyncLogLocalDataSource syncLogLocalDataSource = SyncLogLocalDataSourceImpl(databaseService);
+  final PaymentRemoteDataSource paymentRemoteDataSource = PaymentRemoteDataSourceImpl(apiService);
+  final BillSyncRemoteDataSource billSyncRemoteDataSource = BillSyncRemoteDataSourceImpl(apiService);
 
   // 3. Repository Layer
+  final SyncLogRepository syncLogRepository = SyncLogRepositoryImpl(syncLogLocalDataSource);
   final UserRepository userRepository = UserRepositoryImpl(userLocalDataSource);
-  final ProductRepository productRepository = ProductRepositoryImpl(productLocalDataSource);
+  final ProductRepository productRepository = ProductRepositoryImpl(
+    productLocalDataSource,
+    null,
+    syncLogRepository,
+  );
   final CustomerRepository customerRepository = CustomerRepositoryImpl(customerLocalDataSource);
   final SalesRepository salesRepository = SalesRepositoryImpl(salesLocalDataSource);
   final SettingsRepository settingsRepository = SettingsRepositoryImpl(settingsLocalDataSource);
   final ShiftRepository shiftRepository = ShiftRepositoryImpl(shiftLocalDatasource);
   final ExchangeRepository exchangeRepository = ExchangeRepositoryImpl(exchangeLocalDataSource);
+  final PaymentTypeRepository paymentTypeRepository = PaymentTypeRepositoryImpl(
+    paymentRemoteDataSource,
+    settingsLocalDataSource,
+  );
+  final BillSyncRepository billSyncRepository = BillSyncRepositoryImpl(
+    remoteDataSource: billSyncRemoteDataSource,
+    salesRepository: salesRepository,
+    syncLogRepository: syncLogRepository,
+  );
+
+  // Initialize configured Base API URL from SQLite if present
+  final savedApiBaseUrl = await settingsRepository.getSetting('api_base_url');
+  if (savedApiBaseUrl != null && savedApiBaseUrl.trim().isNotEmpty) {
+    ApiService.setBaseUrl(savedApiBaseUrl);
+  }
 
   // 4. Core Authentication & Shift Services
   final AuthenticationService authService = AuthenticationServiceImpl(userRepository);
@@ -77,6 +108,9 @@ void main() async {
     authService: authService,
     settingsRepository: settingsRepository,
     exchangeRepository: exchangeRepository,
+    paymentTypeRepository: paymentTypeRepository,
+    billSyncRepository: billSyncRepository,
+    syncLogRepository: syncLogRepository,
   );
   final ProductController productController = ProductController(productRepository);
   final CustomerController customerController = CustomerController(customerRepository);
@@ -94,6 +128,8 @@ void main() async {
     salesRepository: salesRepository,
     shiftRepository: shiftRepository,
     productRepository: productRepository,
+    syncLogRepository: syncLogRepository,
+    billSyncRepository: billSyncRepository,
   );
 
   runApp(PosApp(routeGenerator: routeGenerator));

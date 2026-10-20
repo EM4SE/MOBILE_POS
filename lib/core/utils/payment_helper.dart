@@ -3,10 +3,12 @@ import 'dart:convert';
 class ParsedPaymentItem {
   final String method;
   final double amount;
+  final String? cardRef;
 
   const ParsedPaymentItem({
     required this.method,
     required this.amount,
+    this.cardRef,
   });
 }
 
@@ -29,7 +31,12 @@ class PaymentBreakdownHelper {
           if (item is Map) {
             final method = (item['method'] ?? 'Payment').toString();
             final amount = ((item['amount'] as num?) ?? 0.0).toDouble();
-            list.add(ParsedPaymentItem(method: method, amount: amount));
+            final cardRef = (item['cardRef'] ?? item['reference'] ?? '').toString();
+            list.add(ParsedPaymentItem(
+              method: method,
+              amount: amount,
+              cardRef: cardRef.isNotEmpty ? cardRef : null,
+            ));
           }
         }
         if (list.isNotEmpty) return list;
@@ -55,14 +62,26 @@ class PaymentBreakdownHelper {
     double other = 0.0;
 
     for (final p in items) {
-      final m = p.method.toLowerCase();
-      if (m.contains('cash')) {
+      final m = p.method.toLowerCase().trim();
+      final isMobileCash = m.contains('e z') || m.contains('ez') || m.contains('m cash') || m.contains('mcash');
+
+      if ((m == 'cash' || m.contains('cash')) && !isMobileCash) {
         cash += p.amount;
-      } else if (m.contains('card')) {
+      } else if (m.contains('card') ||
+          m.contains('master') ||
+          m.contains('visa') ||
+          m.contains('amex') ||
+          m.contains('debit')) {
         card += p.amount;
       } else if (m.contains('credit')) {
         credit += p.amount;
-      } else if (m.contains('qr') || m.contains('online') || m.contains('mobile')) {
+      } else if (m.contains('qr') ||
+          m.contains('online') ||
+          m.contains('line') ||
+          m.contains('transfer') ||
+          m.contains('mobile') ||
+          m.contains('lanka pay') ||
+          isMobileCash) {
         qr += p.amount;
       } else {
         other += p.amount;

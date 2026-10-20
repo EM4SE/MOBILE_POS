@@ -6,14 +6,18 @@ import '../../../core/services/printer_service.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/customer_model.dart';
 import '../../../data/models/exchange_voucher_model.dart';
+import '../../../data/models/payment_type_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/models/sale_item_model.dart';
 import '../../../data/models/sale_model.dart';
+import '../../../data/repositories/bill_sync_repository.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../../data/repositories/exchange_repository.dart';
+import '../../../data/repositories/payment_type_repository.dart';
 import '../../../data/repositories/product_repository.dart';
 import '../../../data/repositories/sales_repository.dart';
 import '../../../data/repositories/settings_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 
 /// POS Controller managing billing cart state, calculations, discounts, exchange vouchers, returns, hold bills, and checkout
 class PosController extends ChangeNotifier {
@@ -23,6 +27,9 @@ class PosController extends ChangeNotifier {
   final AuthenticationService authService;
   final SettingsRepository? settingsRepository;
   final ExchangeRepository? exchangeRepository;
+  final PaymentTypeRepository? paymentTypeRepository;
+  final BillSyncRepository? billSyncRepository;
+  final SyncLogRepository? syncLogRepository;
 
   final List<SaleItem> _cartItems = [];
   Customer? _selectedCustomer;
@@ -41,6 +48,15 @@ class PosController extends ChangeNotifier {
   // Held Bills in Memory / Session
   final List<Sale> _heldBills = [];
 
+  // Dynamic Payment Types loaded via iid 26 (Cash is always kept as exist)
+  List<PaymentType> _paymentTypes = [
+    PaymentType.cashDefault,
+    ...PaymentType.fallbackApiTypes,
+  ];
+  List<PaymentType> get paymentTypes => _paymentTypes;
+  bool _isLoadingPaymentTypes = false;
+  bool get isLoadingPaymentTypes => _isLoadingPaymentTypes;
+
   PosController({
     required this.salesRepository,
     required this.productRepository,
@@ -48,9 +64,31 @@ class PosController extends ChangeNotifier {
     required this.authService,
     this.settingsRepository,
     this.exchangeRepository,
+    this.paymentTypeRepository,
+    this.billSyncRepository,
+    this.syncLogRepository,
   }) {
     loadHeldBills();
     loadDraftCart();
+    loadPaymentTypes();
+  }
+
+  /// Loads payment types from local cache and remote ERP API (iid 26)
+  Future<void> loadPaymentTypes({bool forceRefresh = false}) async {
+    if (paymentTypeRepository == null) return;
+    _isLoadingPaymentTypes = true;
+    notifyListeners();
+    try {
+      final types = await paymentTypeRepository!.getPaymentTypes(forceRefresh: forceRefresh);
+      if (types.isNotEmpty) {
+        _paymentTypes = types;
+      }
+    } catch (e) {
+      debugPrint('PosController: Error loading payment types: $e');
+    } finally {
+      _isLoadingPaymentTypes = false;
+      notifyListeners();
+    }
   }
 
   Future<void> saveDraftCart() async {
@@ -679,6 +717,19 @@ class PosController extends ChangeNotifier {
 
       final saleId = await salesRepository.insertSaleWithItems(sale, _cartItems);
       final completedSale = sale.copyWith(id: saleId, items: List.from(_cartItems));
+
+      // Asynchronously transmit bill to ERP API /api/Pos/POSBillSave after local save
+      if (billSyncRepository != null) {
+        billSyncRepository!.syncSale(
+          completedSale,
+          userName: authService.currentUser.value?.username ?? 'ONIMTA',
+          customerCode: _selectedCustomer?.id?.toString() ?? '',
+          customerPhone: _selectedCustomer?.phone ?? '',
+        ).catchError((err) {
+          debugPrint('ERP bill sync error: $err');
+          return <String, dynamic>{'success': false, 'error': err.toString()};
+        });
+      }
 
       clearCart();
       _isLoading = false;

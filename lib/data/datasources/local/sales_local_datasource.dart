@@ -12,6 +12,8 @@ abstract class SalesLocalDataSource {
   Future<List<Sale>> getSales({String? status, int? limit, int? offset});
   Future<List<SaleItem>> getSaleItems(int saleId);
   Future<int> updateSaleStatus(int saleId, String status);
+  Future<int> markSaleSynced(int saleId, String syncedAt);
+  Future<List<Sale>> getUnsyncedSales();
   Future<int> deleteSale(int saleId);
   Future<String> generateNextInvoiceNumber({String prefix = 'INV-'});
   Future<double> getTodayTotalSales();
@@ -127,6 +129,38 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       where: '${DatabaseConstants.colId} = ?',
       whereArgs: [saleId],
     );
+  }
+
+  @override
+  Future<int> markSaleSynced(int saleId, String syncedAt) async {
+    return await _databaseService.update(
+      DatabaseConstants.tableSales,
+      {
+        DatabaseConstants.colIsSynced: 1,
+        DatabaseConstants.colSyncedAt: syncedAt,
+        DatabaseConstants.colUpdatedAt: DateTime.now().toIso8601String(),
+      },
+      where: '${DatabaseConstants.colId} = ?',
+      whereArgs: [saleId],
+    );
+  }
+
+  @override
+  Future<List<Sale>> getUnsyncedSales() async {
+    final results = await _databaseService.query(
+      DatabaseConstants.tableSales,
+      where: '(${DatabaseConstants.colIsSynced} IS NULL OR ${DatabaseConstants.colIsSynced} = 0) AND ${DatabaseConstants.colStatus} = ?',
+      whereArgs: ['COMPLETED'],
+      orderBy: '${DatabaseConstants.colId} ASC',
+    );
+
+    final salesList = <Sale>[];
+    for (final map in results) {
+      final saleId = map[DatabaseConstants.colId] as int;
+      final items = await getSaleItems(saleId);
+      salesList.add(Sale.fromMap(map, items));
+    }
+    return salesList;
   }
 
   @override

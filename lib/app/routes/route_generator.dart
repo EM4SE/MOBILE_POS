@@ -4,9 +4,11 @@ import '../../core/services/shift_service.dart';
 import '../../data/models/customer_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/sale_model.dart';
-import '../../data/repositories/sales_repository.dart';
+import '../../data/repositories/bill_sync_repository.dart';
 import '../../data/repositories/product_repository.dart';
+import '../../data/repositories/sales_repository.dart';
 import '../../data/repositories/shift_repository.dart';
+import '../../data/repositories/sync_log_repository.dart';
 import '../../features/authentication/controllers/login_controller.dart';
 import '../../features/authentication/screens/login_screen.dart';
 import '../../features/customers/controllers/customer_controller.dart';
@@ -32,6 +34,7 @@ import '../../features/reports/screens/x_reading_screen.dart';
 import '../../features/reports/screens/z_reading_screen.dart';
 import '../../features/settings/controllers/settings_controller.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../features/settings/screens/sync_logs_screen.dart';
 import '../../features/shift/screens/end_shift_screen.dart';
 import '../../features/shift/screens/start_shift_screen.dart';
 import '../../features/splash/screens/splash_screen.dart';
@@ -49,6 +52,8 @@ class RouteGenerator {
   final SalesRepository salesRepository;
   final ShiftRepository shiftRepository;
   final ProductRepository productRepository;
+  final SyncLogRepository syncLogRepository;
+  final BillSyncRepository? billSyncRepository;
 
   RouteGenerator({
     required this.authService,
@@ -61,6 +66,8 @@ class RouteGenerator {
     required this.salesRepository,
     required this.shiftRepository,
     required this.productRepository,
+    required this.syncLogRepository,
+    this.billSyncRepository,
   });
 
   Route<dynamic> generateRoute(RouteSettings settings) {
@@ -223,6 +230,15 @@ class RouteGenerator {
             controller: settingsController,
             authService: authService,
             productRepository: productRepository,
+          ),
+          settings,
+        );
+
+      case AppRoutes.syncLogs:
+        return _buildRoute(
+          SyncLogsScreen(
+            syncLogRepository: syncLogRepository,
+            billSyncRepository: billSyncRepository,
           ),
           settings,
         );

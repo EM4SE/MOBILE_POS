@@ -89,6 +89,10 @@ class FakeSalesRepository implements SalesRepository {
   @override
   Future<int> updateSaleStatus(int saleId, String status) async => 1;
   @override
+  Future<int> markSaleSynced(int saleId, String syncedAt) async => 1;
+  @override
+  Future<List<Sale>> getUnsyncedSales() async => [];
+  @override
   Future<int> deleteSale(int saleId) async => 1;
   @override
   Future<String> generateNextInvoiceNumber({String prefix = 'INV-'}) async => '${prefix}20261004-0001';

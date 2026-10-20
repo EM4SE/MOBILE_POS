@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/printer_service.dart';
 import '../../../data/repositories/settings_repository.dart';
 
@@ -25,6 +26,14 @@ class SettingsController extends ChangeNotifier {
   String get printerIp => _settings['printer_ip'] ?? '192.168.1.100';
   String get invoicePrefix => _settings['invoice_prefix'] ?? 'INV-';
   String get selectedDevice => _settings['selected_device'] ?? 'NEXGO_N5';
+  String get apiBaseUrl => _settings['api_base_url']?.trim().isNotEmpty == true
+      ? _settings['api_base_url']!.trim()
+      : ApiService.defaultBaseUrl;
+
+  bool get isCustomApiBaseUrl =>
+      _settings['api_base_url']?.trim().isNotEmpty == true &&
+      _settings['api_base_url']!.trim() != ApiService.defaultBaseUrl;
+
   String get selectedDeviceDisplayName {
     switch (selectedDevice) {
       case 'DBL_Z93':
@@ -51,6 +60,11 @@ class SettingsController extends ChangeNotifier {
       _settings = await _settingsRepository.getAllSettings();
       _isLoading = false;
       PrinterService.setSelectedDevice(selectedDevice);
+      if (_settings.containsKey('api_base_url')) {
+        ApiService.setBaseUrl(_settings['api_base_url']);
+      } else {
+        ApiService.setBaseUrl(ApiService.defaultBaseUrl);
+      }
       notifyListeners();
     } catch (e) {
       _isLoading = false;
@@ -65,6 +79,8 @@ class SettingsController extends ChangeNotifier {
       _settings[key] = value;
       if (key == 'selected_device') {
         PrinterService.setSelectedDevice(value);
+      } else if (key == 'api_base_url') {
+        ApiService.setBaseUrl(value);
       }
       notifyListeners();
       return true;
@@ -82,6 +98,9 @@ class SettingsController extends ChangeNotifier {
       if (newSettings.containsKey('selected_device')) {
         PrinterService.setSelectedDevice(newSettings['selected_device']!);
       }
+      if (newSettings.containsKey('api_base_url')) {
+        ApiService.setBaseUrl(newSettings['api_base_url']!);
+      }
       notifyListeners();
       return true;
     } catch (e) {
@@ -89,5 +108,9 @@ class SettingsController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> resetApiBaseUrl() async {
+    return updateSetting('api_base_url', ApiService.defaultBaseUrl);
   }
 }

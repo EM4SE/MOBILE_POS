@@ -10,6 +10,8 @@ abstract class SalesRepository {
   Future<List<Sale>> getSales({String? status, int? limit, int? offset});
   Future<List<SaleItem>> getSaleItems(int saleId);
   Future<int> updateSaleStatus(int saleId, String status);
+  Future<int> markSaleSynced(int saleId, String syncedAt);
+  Future<List<Sale>> getUnsyncedSales();
   Future<int> deleteSale(int saleId);
   Future<String> generateNextInvoiceNumber({String prefix = 'INV-'});
   Future<double> getTodayTotalSales();
@@ -50,6 +52,16 @@ class SalesRepositoryImpl implements SalesRepository {
   @override
   Future<int> updateSaleStatus(int saleId, String status) {
     return _localDataSource.updateSaleStatus(saleId, status);
+  }
+
+  @override
+  Future<int> markSaleSynced(int saleId, String syncedAt) {
+    return _localDataSource.markSaleSynced(saleId, syncedAt);
+  }
+
+  @override
+  Future<List<Sale>> getUnsyncedSales() {
+    return _localDataSource.getUnsyncedSales();
   }
 
   @override

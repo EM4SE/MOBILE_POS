@@ -25,4 +25,5 @@ class AppRoutes {
   static const String reportTotalSales = '/reports/total-sales';
   static const String reportXReading = '/reports/x-reading';
   static const String reportZReading = '/reports/z-reading';
+  static const String syncLogs = '/sync-logs';
 }

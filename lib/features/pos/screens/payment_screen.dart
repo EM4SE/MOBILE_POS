@@ -5,6 +5,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../data/models/payment_type_model.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../authentication/widgets/numeric_keypad.dart';
@@ -72,11 +73,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
     // Default tender input to full remaining due
     _tenderInput = _totalDue.toStringAsFixed(0);
     _isFirstInput = true;
+    // Load payment types from ERP API (iid 26) after initial frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.controller.loadPaymentTypes();
+      }
+    });
   }
 
   void _selectMethod(String methodValue) {
     FeedbackHelper.vibrate();
-    if (methodValue == 'Credit' && widget.controller.selectedCustomer == null) {
+    if (methodValue.toLowerCase().contains('credit') && widget.controller.selectedCustomer == null) {
       AppDialog.showSnackBar(
         context,
         'Credit payment requires an assigned Customer. Please select a Customer first.',
@@ -210,7 +217,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     // Require customer for Credit
-    if (_selectedMethod == 'Credit' && widget.controller.selectedCustomer == null) {
+    if (_selectedMethod.toLowerCase().contains('credit') && widget.controller.selectedCustomer == null) {
       AppDialog.showSnackBar(
         context,
         'Credit payment requires an assigned Customer. Please select a Customer first.',
@@ -246,7 +253,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     // Require customer if Credit is used
-    final hasCredit = _selectedMethod == 'Credit' || _paymentEntries.any((e) => e.method == 'Credit');
+    final hasCredit = _selectedMethod.toLowerCase().contains('credit') ||
+        _paymentEntries.any((e) => e.method.toLowerCase().contains('credit'));
     if (hasCredit && widget.controller.selectedCustomer == null) {
       AppDialog.showSnackBar(
         context,
@@ -397,40 +405,48 @@ class _PaymentScreenState extends State<PaymentScreen> {
     required String label,
     required IconData icon,
     required String methodValue,
+    required Color color,
   }) {
-    final isSelected = _selectedMethod == methodValue;
+    final isSelected = _selectedMethod.toLowerCase() == methodValue.toLowerCase();
 
     return Material(
-      color: isSelected ? AppColors.primary : AppColors.surface,
+      color: isSelected ? color : color.withOpacity(0.09),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: BorderRadius.circular(4),
         side: BorderSide(
-          color: isSelected ? AppColors.accent : AppColors.border,
-          width: isSelected ? 2.0 : 1.0,
+          color: isSelected ? Colors.white : color.withOpacity(0.4),
+          width: isSelected ? 2.0 : 1.2,
         ),
       ),
-      elevation: isSelected ? 2 : 0,
+      elevation: isSelected ? 3 : 0,
+      shadowColor: color.withOpacity(0.4),
       child: InkWell(
+        borderRadius: BorderRadius.circular(4),
         onTap: () => _selectMethod(methodValue),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: 26,
-                color: isSelected ? Colors.white : AppColors.textPrimary,
+                size: 19,
+                color: isSelected ? Colors.white : color,
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: isSelected ? Colors.white : AppColors.textPrimary,
-                  letterSpacing: 0.5,
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 8.8,
+                    fontWeight: FontWeight.w900,
+                    color: isSelected ? Colors.white : AppColors.textPrimary,
+                    letterSpacing: 0.2,
+                    height: 1.05,
+                  ),
                 ),
               ),
             ],
@@ -442,9 +458,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isCompleteReady = _isAmountFullyCovered;
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final isCompleteReady = _isAmountFullyCovered;
+        final List<PaymentType> paymentTypes = widget.controller.paymentTypes;
 
-    return Scaffold(
+        return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const AppHeader(
         title: 'PAYMENT & CHECKOUT',
@@ -605,36 +625,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
                   const SizedBox(height: 5),
 
-                  // 2. Square Payment Method Buttons
-                  GridView.count(
-                    crossAxisCount: 4,
+                  // 2. Dynamic Payment Method Grid (4 per row, full width of screen, multiple rows)
+                  GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 5,
-                    mainAxisSpacing: 5,
-                    childAspectRatio: 1.35,
-                    children: [
-                      _buildMethodSquareButton(
-                        label: 'CASH',
-                        icon: Icons.payments_outlined,
-                        methodValue: 'Cash',
-                      ),
-                      _buildMethodSquareButton(
-                        label: 'CARD',
-                        icon: Icons.credit_card_outlined,
-                        methodValue: 'Card',
-                      ),
-                      _buildMethodSquareButton(
-                        label: 'QR / ONLINE',
-                        icon: Icons.qr_code_2_outlined,
-                        methodValue: 'QR',
-                      ),
-                      _buildMethodSquareButton(
-                        label: 'CREDIT',
-                        icon: Icons.account_balance_wallet_outlined,
-                        methodValue: 'Credit',
-                      ),
-                    ],
+                    itemCount: paymentTypes.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 4,
+                      mainAxisSpacing: 4,
+                      childAspectRatio: 1.55,
+                    ),
+                    itemBuilder: (context, index) {
+                      final pt = paymentTypes[index];
+                      return _buildMethodSquareButton(
+                        label: pt.description.toUpperCase(),
+                        icon: pt.icon,
+                        methodValue: pt.description,
+                        color: pt.color,
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 5),
@@ -886,6 +896,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ],
         ),
       ),
+    );
+      },
     );
   }
 }

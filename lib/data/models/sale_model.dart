@@ -18,6 +18,8 @@ class Sale {
   final String cashierName;
   final String? createdAt;
   final String? updatedAt;
+  final bool isSynced;
+  final String? syncedAt;
   final List<SaleItem> items;
 
   const Sale({
@@ -36,6 +38,8 @@ class Sale {
     this.cashierName = 'Admin',
     this.createdAt,
     this.updatedAt,
+    this.isSynced = false,
+    this.syncedAt,
     this.items = const [],
   });
 
@@ -55,6 +59,8 @@ class Sale {
     String? cashierName,
     String? createdAt,
     String? updatedAt,
+    bool? isSynced,
+    String? syncedAt,
     List<SaleItem>? items,
   }) {
     return Sale(
@@ -73,6 +79,8 @@ class Sale {
       cashierName: cashierName ?? this.cashierName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isSynced: isSynced ?? this.isSynced,
+      syncedAt: syncedAt ?? this.syncedAt,
       items: items ?? this.items,
     );
   }
@@ -91,6 +99,8 @@ class Sale {
       DatabaseConstants.colPaymentMethod: paymentMethod,
       DatabaseConstants.colStatus: status,
       DatabaseConstants.colCashierName: cashierName,
+      DatabaseConstants.colIsSynced: isSynced ? 1 : 0,
+      DatabaseConstants.colSyncedAt: syncedAt,
       DatabaseConstants.colCreatedAt: createdAt ?? DateTime.now().toIso8601String(),
       DatabaseConstants.colUpdatedAt: updatedAt ?? DateTime.now().toIso8601String(),
     };
@@ -117,6 +127,8 @@ class Sale {
       cashierName: (map[DatabaseConstants.colCashierName] as String?) ?? 'Admin',
       createdAt: map[DatabaseConstants.colCreatedAt] as String?,
       updatedAt: map[DatabaseConstants.colUpdatedAt] as String?,
+      isSynced: (map[DatabaseConstants.colIsSynced] as int? ?? 0) == 1,
+      syncedAt: map[DatabaseConstants.colSyncedAt] as String?,
       items: items,
     );
   }

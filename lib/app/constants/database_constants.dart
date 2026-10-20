@@ -16,6 +16,7 @@ class DatabaseConstants {
   static const String tableShifts = 'shifts';
   static const String tableExchangeVouchers = 'exchange_vouchers';
   static const String tableCashMovements = 'cash_movements';
+  static const String tableSyncLogs = 'sync_activity_logs';
 
   // Exchange Vouchers Columns
   static const String colVoucherCode = 'voucher_code';
@@ -84,6 +85,8 @@ class DatabaseConstants {
   static const String colPaymentMethod = 'payment_method';
   static const String colStatus = 'status'; // 'COMPLETED', 'HELD', 'CANCELLED'
   static const String colCashierName = 'cashier_name';
+  static const String colIsSynced = 'is_synced';
+  static const String colSyncedAt = 'synced_at';
 
   // Sale Items Columns
   static const String colSaleId = 'sale_id';
@@ -98,4 +101,12 @@ class DatabaseConstants {
   // Settings Columns
   static const String colKey = 'key';
   static const String colValue = 'value';
+
+  // Sync Activity Logs Columns
+  static const String colLogActionType = 'action_type';
+  static const String colLogTitle = 'title';
+  static const String colLogDetails = 'details';
+  static const String colLogStatus = 'status';
+  static const String colLogResponseBody = 'response_body';
+  static const String colLogErrorMessage = 'error_message';
 }

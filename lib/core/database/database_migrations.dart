@@ -400,6 +400,34 @@ class DatabaseMigrations {
       try {
         await db.execute('CREATE INDEX IF NOT EXISTS idx_products_isbn ON ${DatabaseConstants.tableProducts} (${DatabaseConstants.colIsbn});');
       } catch (_) {}
+
+      // Safe update for sales sync columns
+      try {
+        final salesCols = await db.rawQuery('PRAGMA table_info(${DatabaseConstants.tableSales})');
+        final hasIsSynced = salesCols.any((col) => col['name'] == DatabaseConstants.colIsSynced);
+        if (!hasIsSynced) {
+          await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colIsSynced} INTEGER NOT NULL DEFAULT 0;');
+          await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colSyncedAt} TEXT;');
+        }
+      } catch (_) {}
+
+      // Table for Sync and User Activity Audit Logs
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS ${DatabaseConstants.tableSyncLogs} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            details TEXT,
+            status TEXT NOT NULL,
+            response_body TEXT,
+            error_message TEXT,
+            created_at TEXT NOT NULL
+          )
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_sync_logs_action ON ${DatabaseConstants.tableSyncLogs} (action_type);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_sync_logs_status ON ${DatabaseConstants.tableSyncLogs} (status);');
+      } catch (_) {}
     } catch (_) {}
   }
 

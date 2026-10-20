@@ -24,26 +24,9 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
     String? baseUrl,
     void Function(int count, String status)? onProgress,
   }) async {
-    final effectiveBaseUrl = baseUrl ?? ApiService.defaultBaseUrl;
+    final effectiveBaseUrl = baseUrl ?? ApiService.baseUrl;
     final Map<String, Product> productMap = {};
 
-    void addFromResponse(Map<String, dynamic> res) {
-      final cr = res['CommonResult'] ?? res['commonResult'];
-      if (cr is Map) {
-        for (final entry in cr.entries) {
-          if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
-            for (final row in (entry.value as List)) {
-              if (row is Map) {
-                final p = _mapToProduct(row);
-                if (p != null) {
-                  productMap[p.code] = p;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
 
     onProgress?.call(0, 'Discovering departments...');
 
@@ -62,7 +45,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
           {'para_Name': '@Text3', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
         ],
       );
-      deptList = (deptRes['CommonResult']?['Table'] ?? []) as List;
+      deptList = _extractList(deptRes['CommonResult'] ?? deptRes['commonResult']);
       debugPrint('ProductRemoteDataSource: Found ${deptList.length} departments');
     } catch (e) {
       debugPrint('ProductRemoteDataSource @Iid=3 error: $e');
@@ -92,9 +75,9 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
             {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
           ],
         );
-        addFromResponse(catRes); // direct products in Table1
+        _addProductsFromResponse(catRes, productMap); // direct products in Table1 or list
 
-        final catList = (catRes['CommonResult']?['Table'] ?? []) as List;
+        final catList = _extractList(catRes['CommonResult'] ?? catRes['commonResult']);
         for (final c in catList) {
           if (c is! Map) continue;
           final cCode = (c['Cat_Code'] ?? c['cat_Code'] ?? '').toString().trim();
@@ -136,7 +119,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
               {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
             ],
           );
-          addFromResponse(prodRes);
+          _addProductsFromResponse(prodRes, productMap);
         } catch (_) {}
       }));
 
@@ -159,7 +142,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
           {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
         ],
       );
-      addFromResponse(favRes);
+      _addProductsFromResponse(favRes, productMap);
     } catch (_) {}
 
     onProgress?.call(productMap.length, 'Completed: ${productMap.length} products ready');
@@ -169,7 +152,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
 
   @override
   Future<List<Product>> fetchQuickProductsFromApi({String? baseUrl}) async {
-    final effectiveBaseUrl = baseUrl ?? ApiService.defaultBaseUrl;
+    final effectiveBaseUrl = baseUrl ?? ApiService.baseUrl;
     final Map<String, Product> productMap = {};
 
     try {
@@ -186,22 +169,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
           {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
         ],
       );
-
-      final cr = favRes['CommonResult'] ?? favRes['commonResult'];
-      if (cr is Map) {
-        for (final entry in cr.entries) {
-          if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
-            for (final row in (entry.value as List)) {
-              if (row is Map) {
-                final p = _mapToProduct(row);
-                if (p != null) {
-                  productMap[p.code] = p;
-                }
-              }
-            }
-          }
-        }
-      }
+      _addProductsFromResponse(favRes, productMap);
     } catch (e) {
       debugPrint('ProductRemoteDataSource quick fetch notice: $e');
     }
@@ -211,7 +179,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
 
   @override
   Future<Product?> fetchProductByCode(String code, {String? baseUrl}) async {
-    final effectiveBaseUrl = baseUrl ?? ApiService.defaultBaseUrl;
+    final effectiveBaseUrl = baseUrl ?? ApiService.baseUrl;
 
     // 1. Try Barcode Scan endpoint @Iid = "65" (matching RHINO M10P InvoiceFragment line 5267)
     try {
@@ -228,19 +196,8 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
           {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
         ],
       );
-      final cr = res65['CommonResult'] ?? res65['commonResult'];
-      if (cr is Map) {
-        for (final entry in cr.entries) {
-          if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
-            for (final row in (entry.value as List)) {
-              if (row is Map) {
-                final p = _mapToProduct(row);
-                if (p != null) return p;
-              }
-            }
-          }
-        }
-      }
+      final p = _findProductInResponse(res65);
+      if (p != null) return p;
     } catch (_) {}
 
     // 2. Fallback to @Iid = "11" (Product Code lookup)
@@ -258,20 +215,8 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
           {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
         ],
       );
-
-      final cr = response['CommonResult'] ?? response['commonResult'];
-      if (cr is Map) {
-        for (final entry in cr.entries) {
-          if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
-            for (final row in (entry.value as List)) {
-              if (row is Map) {
-                final p = _mapToProduct(row);
-                if (p != null) return p;
-              }
-            }
-          }
-        }
-      }
+      final p = _findProductInResponse(response);
+      if (p != null) return p;
     } catch (e) {
       debugPrint('ProductRemoteDataSource fetchProductByCode failed: $e');
     }
@@ -280,8 +225,7 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
 
   @override
   Future<List<Product>> searchProductsLike(String query, {String? baseUrl}) async {
-    final effectiveBaseUrl = baseUrl ?? ApiService.defaultBaseUrl;
-    final List<Product> products = [];
+    final effectiveBaseUrl = baseUrl ?? ApiService.baseUrl;
     try {
       final response = await _apiService.executeCommonSp(
         baseUrl: effectiveBaseUrl,
@@ -296,22 +240,102 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
           {'para_Name': '@Text4', 'para_Type': 'varchar', 'para_Direction': 'Input', 'para_Data': ''},
         ],
       );
+      return _findProductsInResponse(response);
+    } catch (e) {
+      debugPrint('ProductRemoteDataSource searchProductsLike failed: $e');
+      return [];
+    }
+  }
 
-      final cr = response['CommonResult'] ?? response['commonResult'];
-      if (cr is Map) {
-        for (final entry in cr.entries) {
-          if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
-            for (final row in (entry.value as List)) {
-              if (row is Map) {
-                final p = _mapToProduct(row);
-                if (p != null) products.add(p);
+  List<dynamic> _extractList(dynamic cr, [String tableKey = 'Table']) {
+    if (cr == null) return const [];
+    if (cr is List) return cr;
+    if (cr is Map) {
+      if (cr[tableKey] is List) return cr[tableKey] as List;
+      for (final entry in cr.entries) {
+        if (entry.key.toString().toLowerCase() == tableKey.toLowerCase() && entry.value is List) {
+          return entry.value as List;
+        }
+      }
+    }
+    return const [];
+  }
+
+  void _addProductsFromResponse(Map<String, dynamic> res, Map<String, Product> productMap) {
+    final cr = res['CommonResult'] ?? res['commonResult'];
+    if (cr == null) return;
+    if (cr is List) {
+      for (final row in cr) {
+        if (row is Map) {
+          final p = _mapToProduct(row);
+          if (p != null) {
+            productMap[p.code] = p;
+          }
+        }
+      }
+    } else if (cr is Map) {
+      for (final entry in cr.entries) {
+        if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
+          for (final row in (entry.value as List)) {
+            if (row is Map) {
+              final p = _mapToProduct(row);
+              if (p != null) {
+                productMap[p.code] = p;
               }
             }
           }
         }
       }
-    } catch (e) {
-      debugPrint('ProductRemoteDataSource searchProductsLike failed: $e');
+    }
+  }
+
+  Product? _findProductInResponse(Map<String, dynamic> res) {
+    final cr = res['CommonResult'] ?? res['commonResult'];
+    if (cr == null) return null;
+    if (cr is List) {
+      for (final row in cr) {
+        if (row is Map) {
+          final p = _mapToProduct(row);
+          if (p != null) return p;
+        }
+      }
+    } else if (cr is Map) {
+      for (final entry in cr.entries) {
+        if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
+          for (final row in (entry.value as List)) {
+            if (row is Map) {
+              final p = _mapToProduct(row);
+              if (p != null) return p;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  List<Product> _findProductsInResponse(Map<String, dynamic> res) {
+    final List<Product> products = [];
+    final cr = res['CommonResult'] ?? res['commonResult'];
+    if (cr == null) return products;
+    if (cr is List) {
+      for (final row in cr) {
+        if (row is Map) {
+          final p = _mapToProduct(row);
+          if (p != null) products.add(p);
+        }
+      }
+    } else if (cr is Map) {
+      for (final entry in cr.entries) {
+        if (entry.key.toString().toLowerCase().startsWith('table') && entry.value is List) {
+          for (final row in (entry.value as List)) {
+            if (row is Map) {
+              final p = _mapToProduct(row);
+              if (p != null) products.add(p);
+            }
+          }
+        }
+      }
     }
     return products;
   }
