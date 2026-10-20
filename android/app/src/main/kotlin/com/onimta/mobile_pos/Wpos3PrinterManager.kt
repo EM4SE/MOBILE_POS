@@ -908,6 +908,10 @@ class Wpos3PrinterManager(private val context: Context) {
             val discount = reportData["discount"] as? String ?: ""
             val netSales = reportData["netSales"] as? String ?: ""
             val cashSales = reportData["cashSales"] as? String ?: ""
+            val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+            val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                if (k != null && v != null) k.toString() to v.toString() else null
+            }?.toMap() ?: emptyMap()
             val cardSales = reportData["cardSales"] as? String ?: ""
             val paidIn = reportData["paidIn"] as? String ?: ""
             val paidOut = reportData["paidOut"] as? String ?: ""
@@ -922,8 +926,15 @@ class Wpos3PrinterManager(private val context: Context) {
             drawTwoCols("NET SALES:", netSales, 21f, true)
             drawDivider(true)
 
-            drawTwoCols("Cash Sales:", cashSales, 19f, false)
-            drawTwoCols("Card Sales:", cardSales, 19f, false)
+            drawTwoCols("Cash Sales:", cashSales, 19f, true)
+            drawTwoCols("Non-Cash Sales:", nonCashSales, 19f, true)
+            if (nonCashBreakdown.isNotEmpty()) {
+                for ((method, amount) in nonCashBreakdown) {
+                    drawTwoCols("  • $method:", amount, 17f, false)
+                }
+            } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
+                drawTwoCols("  • Card Sales:", cardSales, 17f, false)
+            }
             drawTwoCols("Cash Paid In (+):", paidIn, 19f, false)
             drawTwoCols("Cash Paid Out (-):", paidOut, 19f, false)
             drawDivider(true)
@@ -1527,6 +1538,10 @@ class Wpos3PrinterManager(private val context: Context) {
         val totalNetRevenue = reportData["totalNetRevenue"] as? String ?: "LKR 0.00"
 
         val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+        val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+        val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+            if (k != null && v != null) k.toString() to v.toString() else null
+        }?.toMap() ?: emptyMap()
         val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
         val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
         val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
@@ -1563,10 +1578,17 @@ class Wpos3PrinterManager(private val context: Context) {
         canvas.drawText("PAYMENTS / TENDER BREAKDOWN", 14f, y, paint)
         y += 24f
 
-        drawTwoCols("Cash Sales:", cashSales, 18f, false)
-        drawTwoCols("Card Sales:", cardSales, 18f, false)
-        if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) drawTwoCols("QR / Online:", qrSales, 18f, false)
-        if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) drawTwoCols("Credit Sales:", creditSales, 18f, false)
+        drawTwoCols("Cash Sales:", cashSales, 18f, true)
+        drawTwoCols("Non-Cash Sales:", nonCashSales, 18f, true)
+        if (nonCashBreakdown.isNotEmpty()) {
+            for ((method, amount) in nonCashBreakdown) {
+                drawTwoCols("  • $method:", amount, 16f, false)
+            }
+        } else {
+            if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) drawTwoCols("  • Card Sales:", cardSales, 16f, false)
+            if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) drawTwoCols("  • QR / Online:", qrSales, 16f, false)
+            if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) drawTwoCols("  • Credit Sales:", creditSales, 16f, false)
+        }
         drawDivider(false)
         y += 20f
 

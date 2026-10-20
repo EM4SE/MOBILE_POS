@@ -8,6 +8,8 @@ abstract class AuthenticationService {
   bool get isAuthenticated;
   Future<User> loginWithPin(String pin);
   void logout();
+  Future<List<User>> getAllUsers();
+  Future<List<User>> syncCashiersFromApi({String? baseUrl});
 }
 
 class AuthenticationServiceImpl implements AuthenticationService {
@@ -45,5 +47,15 @@ class AuthenticationServiceImpl implements AuthenticationService {
   @override
   void logout() {
     _currentUser.value = null;
+  }
+
+  @override
+  Future<List<User>> getAllUsers() {
+    return _userRepository.getAllUsers();
+  }
+
+  @override
+  Future<List<User>> syncCashiersFromApi({String? baseUrl}) {
+    return _userRepository.fetchAndSyncCashiers(baseUrl: baseUrl);
   }
 }

@@ -98,6 +98,8 @@ class _XReadingScreenState extends State<XReadingScreen> {
         tax: st.totalTax,
         netSales: st.grandTotalSales,
         cashSales: st.cashSales,
+        nonCashSales: st.nonCashSales,
+        nonCashBreakdown: st.nonCashBreakdown,
         cardSales: st.cardSales,
         otherSales: st.otherSales,
         paidIn: st.paidIn,
@@ -293,14 +295,20 @@ class _XReadingScreenState extends State<XReadingScreen> {
                                       style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
                                     ),
                                     const Divider(height: 12),
-                                    _buildRow('Cash Sales', CurrencyFormatter.formatWithSymbol(st.cashSales)),
-                                    _buildRow('Card Sales', CurrencyFormatter.formatWithSymbol(st.cardSales)),
-                                    if (st.qrSales > 0)
-                                      _buildRow('QR / Online Sales', CurrencyFormatter.formatWithSymbol(st.qrSales)),
-                                    if (st.creditSales > 0)
-                                      _buildRow('Credit Sales', CurrencyFormatter.formatWithSymbol(st.creditSales)),
-                                    if (st.otherSales > 0)
-                                      _buildRow('Other Payments', CurrencyFormatter.formatWithSymbol(st.otherSales)),
+                                    _buildRow('Cash Sales', CurrencyFormatter.formatWithSymbol(st.cashSales), isBold: true),
+                                    _buildRow('Non-Cash Sales', CurrencyFormatter.formatWithSymbol(st.nonCashSales), isBold: true),
+                                    if (st.nonCashBreakdown.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      ...st.nonCashBreakdown.entries.map((entry) => Padding(
+                                        padding: const EdgeInsets.only(left: 12),
+                                        child: _buildRow(
+                                          '• ${entry.key}',
+                                          CurrencyFormatter.formatWithSymbol(entry.value),
+                                          valueColor: const Color(0xFF1D4ED8),
+                                        ),
+                                      )),
+                                      const SizedBox(height: 4),
+                                    ],
                                   ],
                                 ),
                               ),

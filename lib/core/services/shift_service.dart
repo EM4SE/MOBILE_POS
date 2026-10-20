@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
 import '../../data/datasources/local/shift_local_datasource.dart';
+import '../../data/datasources/remote/shift_remote_datasource.dart';
 import '../../data/models/business_day_model.dart';
 import '../../data/models/shift_model.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/shift_repository.dart';
+import '../../data/repositories/sync_log_repository.dart';
+import '../utils/currency_formatter.dart';
 import 'printer_service.dart';
 
 abstract class ShiftService {
@@ -37,10 +40,16 @@ abstract class ShiftService {
 
 class ShiftServiceImpl implements ShiftService {
   final ShiftRepository _repository;
+  final ShiftRemoteDataSource? _remoteDataSource;
+  final SyncLogRepository? _syncLogRepository;
   final ValueNotifier<BusinessDay?> _activeDay = ValueNotifier<BusinessDay?>(null);
   final ValueNotifier<Shift?> _activeShift = ValueNotifier<Shift?>(null);
 
-  ShiftServiceImpl(this._repository);
+  ShiftServiceImpl(
+    this._repository, [
+    this._remoteDataSource,
+    this._syncLogRepository,
+  ]);
 
   @override
   ValueListenable<BusinessDay?> get activeDay => _activeDay;
@@ -87,6 +96,13 @@ class ShiftServiceImpl implements ShiftService {
       openedAt: result.shift.openedAt,
     );
 
+    await _syncLogRepository?.logAction(
+      actionType: 'SHIFT_EVENT',
+      title: 'Day & Shift Started',
+      details: 'Day #${result.day.dayNumber}, Shift #${result.shift.shiftNumber} | Float: ${CurrencyFormatter.formatWithSymbol(openingBalance)} | Cashier: ${user.displayName}',
+      status: 'SUCCESS',
+    );
+
     return result;
   }
 
@@ -118,6 +134,13 @@ class ShiftServiceImpl implements ShiftService {
       isEndReport: false,
       openingBalance: openingBalance,
       openedAt: shift.openedAt,
+    );
+
+    await _syncLogRepository?.logAction(
+      actionType: 'SHIFT_EVENT',
+      title: 'Shift Started',
+      details: 'Day #${day.dayNumber}, Shift #${shift.shiftNumber} | Float: ${CurrencyFormatter.formatWithSymbol(openingBalance)} | Cashier: ${user.displayName}',
+      status: 'SUCCESS',
     );
 
     return shift;
@@ -182,6 +205,8 @@ class ShiftServiceImpl implements ShiftService {
       tax: stats.totalTax,
       netSales: stats.grandTotalSales,
       cashSales: stats.cashSales,
+      nonCashSales: stats.nonCashSales,
+      nonCashBreakdown: stats.nonCashBreakdown,
       cardSales: stats.cardSales,
       otherSales: stats.otherSales,
       paidIn: stats.paidIn,
@@ -201,6 +226,34 @@ class ShiftServiceImpl implements ShiftService {
         cashierName: user.displayName,
       );
 
+      // Call ERP Day End API (sp_Android_Common_API with @Iid = 7)
+      if (_remoteDataSource != null) {
+        try {
+          final dayStartDate = closedDay.openedAt.isNotEmpty ? closedDay.openedAt : currentDay.openedAt;
+          final res = await _remoteDataSource.sendDayEnd(
+            location: '01',
+            unit: '01',
+            dayStartDate: dayStartDate,
+          );
+          await _syncLogRepository?.logAction(
+            actionType: 'SHIFT_EVENT',
+            title: 'Day End ERP API Synced (Iid 7)',
+            details: 'Business Day #${closedDay.dayNumber} closed | Location: 01 | Unit: 01 | Start Date: $dayStartDate | Cashier: ${user.displayName} | Actual Cash: ${CurrencyFormatter.formatWithSymbol(actualClosingCash)}',
+            status: 'SUCCESS',
+            responseBody: res,
+          );
+        } catch (e) {
+          debugPrint('Day End ERP iid 7 call error: $e');
+          await _syncLogRepository?.logAction(
+            actionType: 'SHIFT_EVENT',
+            title: 'Day End ERP API Failed (Iid 7)',
+            details: 'Business Day #${closedDay.dayNumber} closed locally. Server error: $e',
+            status: 'FAILED',
+            errorMessage: e.toString(),
+          );
+        }
+      }
+
       // Automatic Receipt Print for Day End
       await PrinterService.printShiftEventReceipt(
         title: '*** DAY END FINANCIAL REPORT ***',
@@ -216,6 +269,8 @@ class ShiftServiceImpl implements ShiftService {
         tax: dayStats.totalTax,
         netSales: closedDay.totalSales,
         cashSales: dayStats.cashSales,
+        nonCashSales: dayStats.nonCashSales,
+        nonCashBreakdown: dayStats.nonCashBreakdown,
         cardSales: dayStats.cardSales,
         otherSales: dayStats.otherSales,
         paidIn: dayStats.paidIn,

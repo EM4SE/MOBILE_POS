@@ -769,6 +769,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _showApiSettingsDialog,
                   ),
 
+                  if (widget.authService.currentUser.value?.isAdmin == true) ...[
+                    const SizedBox(height: AppDimensions.sm),
+                    SettingsTile(
+                      title: 'Cashier Permission Settings',
+                      description: 'Manage More menu feature permissions for cashiers',
+                      icon: Icons.admin_panel_settings_outlined,
+                      iconColor: const Color(0xFFD97706),
+                      onTap: () => Navigator.of(context).pushNamed(AppRoutes.cashierPermissions),
+                    ),
+                  ],
+
                   const SizedBox(height: AppDimensions.sm),
 
                   // Device Hardware Selection Tile

@@ -5,6 +5,8 @@ abstract class SettingsRepository {
   Future<String?> getSetting(String key);
   Future<void> saveSetting(String key, String value);
   Future<void> saveSettings(Map<String, String> settings);
+  Future<void> updateSetting(String key, String value);
+  Future<void> updateSettings(Map<String, String> settings);
 }
 
 class SettingsRepositoryImpl implements SettingsRepository {
@@ -29,6 +31,16 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<void> saveSettings(Map<String, String> settings) {
+    return _localDataSource.saveSettings(settings);
+  }
+
+  @override
+  Future<void> updateSetting(String key, String value) {
+    return _localDataSource.saveSetting(key, value);
+  }
+
+  @override
+  Future<void> updateSettings(Map<String, String> settings) {
     return _localDataSource.saveSettings(settings);
   }
 }

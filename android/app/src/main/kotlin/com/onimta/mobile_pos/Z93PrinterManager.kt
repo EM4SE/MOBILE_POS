@@ -491,44 +491,88 @@ class Z93PrinterManager(private val context: Context) {
                 val s = NativePrinterSession(p, context)
 
                 val appName = shiftData["appName"] as? String ?: "ONIMTA POS"
-                val shiftNo = shiftData["shiftNo"] as? String ?: ""
-                val cashier = shiftData["cashier"] as? String ?: "Admin"
-                val startTime = shiftData["startTime"] as? String ?: ""
-                val endTime = shiftData["endTime"] as? String ?: ""
-                val openingCash = shiftData["openingCash"] as? String ?: "LKR 0.00"
-                val cashSales = shiftData["cashSales"] as? String ?: "LKR 0.00"
-                val cardSales = shiftData["cardSales"] as? String ?: "LKR 0.00"
-                val creditSales = shiftData["creditSales"] as? String ?: "LKR 0.00"
-                val paidIn = shiftData["paidIn"] as? String ?: "LKR 0.00"
-                val paidOut = shiftData["paidOut"] as? String ?: "LKR 0.00"
-                val expectedCash = shiftData["expectedCash"] as? String ?: "LKR 0.00"
-                val actualCash = shiftData["actualCash"] as? String ?: "LKR 0.00"
-                val difference = shiftData["difference"] as? String ?: "LKR 0.00"
+                val title = (shiftData["title"] as? String)?.takeIf { it.isNotEmpty() } ?: "SHIFT REPORT"
+                val dayNumber = (shiftData["dayNumber"] as? String)?.takeIf { it.isNotEmpty() } ?: ""
+                val shiftNo = (shiftData["shiftNumber"] as? String)?.takeIf { it.isNotEmpty() }
+                    ?: (shiftData["shiftNo"] as? String)?.takeIf { it.isNotEmpty() } ?: ""
+                val cashier = (shiftData["cashier"] as? String)?.takeIf { it.isNotEmpty() } ?: "Admin"
+                val dateTime = (shiftData["dateTime"] as? String)?.takeIf { it.isNotEmpty() }
+                    ?: (shiftData["startTime"] as? String) ?: ""
+                val openedAt = (shiftData["openedAt"] as? String)?.takeIf { it.isNotEmpty() } ?: ""
+                val isEndReport = shiftData["isEndReport"] as? Boolean ?: false
+
+                val openingFloat = (shiftData["openingBalance"] as? String)?.takeIf { it.isNotEmpty() }
+                    ?: (shiftData["openingCash"] as? String)?.takeIf { it.isNotEmpty() }
+                    ?: "LKR 0.00"
 
                 s.printText(appName, size = 30, bold = true, align = Layout.Alignment.ALIGN_CENTER)
-                s.printText("SHIFT SUMMARY REPORT", size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+                s.printText(title, size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                if (shiftNo.isNotEmpty()) s.printTwoCols("Shift #:", shiftNo, size = 22, bold = true)
+                if (dayNumber.isNotEmpty()) s.printTwoCols("Day #:", dayNumber, size = 22, bold = false)
+                if (shiftNo.isNotEmpty()) s.printTwoCols("Shift #:", shiftNo, size = 22, bold = false)
                 s.printTwoCols("Cashier:", cashier, size = 22, bold = false)
-                s.printTwoCols("Start:", startTime, size = 22, bold = false)
-                if (endTime.isNotEmpty()) s.printTwoCols("End:", endTime, size = 22, bold = false)
+                if (dateTime.isNotEmpty()) s.printTwoCols("Date / Time:", dateTime, size = 22, bold = false)
+                if (openedAt.isNotEmpty()) s.printTwoCols("Opened At:", openedAt, size = 22, bold = false)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Opening Float:", openingCash, size = 22, bold = false)
-                s.printTwoCols("Cash Sales:", cashSales, size = 22, bold = false)
-                s.printTwoCols("Card Sales:", cardSales, size = 22, bold = false)
-                if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                    s.printTwoCols("Credit Sales:", creditSales, size = 22, bold = false)
+                if (!isEndReport) {
+                    // START OF DAY OR START OF SHIFT
+                    s.printTwoCols("STARTING FLOAT:", openingFloat, size = 26, bold = true)
+                    s.printDivider("-", 48)
+                } else {
+                    // END OF SHIFT (Z-REPORT) OR END OF DAY
+                    val totalInvoices = shiftData["totalInvoices"] as? String ?: "0"
+                    val grossSales = shiftData["grossSales"] as? String ?: "LKR 0.00"
+                    val discount = shiftData["discount"] as? String ?: "LKR 0.00"
+                    val tax = shiftData["tax"] as? String ?: "LKR 0.00"
+                    val netSales = shiftData["netSales"] as? String ?: "LKR 0.00"
+
+                    val cashSales = shiftData["cashSales"] as? String ?: "LKR 0.00"
+                    val nonCashSales = shiftData["nonCashSales"] as? String ?: "LKR 0.00"
+                    val nonCashBreakdown = (shiftData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                        if (k != null && v != null) k.toString() to v.toString() else null
+                    }?.toMap() ?: emptyMap()
+                    val cardSales = shiftData["cardSales"] as? String ?: "LKR 0.00"
+                    val otherSales = shiftData["otherSales"] as? String ?: "LKR 0.00"
+
+                    val paidIn = shiftData["paidIn"] as? String ?: "LKR 0.00"
+                    val paidOut = shiftData["paidOut"] as? String ?: "LKR 0.00"
+                    val expectedCash = shiftData["expectedCash"] as? String ?: "LKR 0.00"
+                    val actualCash = shiftData["actualCash"] as? String ?: "LKR 0.00"
+                    val difference = (shiftData["cashDiff"] as? String)?.takeIf { it.isNotEmpty() }
+                        ?: (shiftData["difference"] as? String) ?: "LKR 0.00"
+
+                    s.printTwoCols("Opening Float:", openingFloat, size = 22, bold = false)
+                    s.printTwoCols("Total Invoices:", totalInvoices, size = 22, bold = false)
+                    s.printTwoCols("Gross Sales:", grossSales, size = 22, bold = false)
+                    if (discount.isNotEmpty() && discount != "LKR 0.00") {
+                        s.printTwoCols("Discounts:", "-$discount", size = 22, bold = false)
+                    }
+                    if (tax.isNotEmpty() && tax != "LKR 0.00") {
+                        s.printTwoCols("Tax:", tax, size = 22, bold = false)
+                    }
+                    s.printTwoCols("NET SALES:", netSales, size = 24, bold = true)
+                    s.printDivider("-", 48)
+
+                    s.printTwoCols("Cash Sales:", cashSales, size = 22, bold = true)
+                    s.printTwoCols("Non-Cash Sales:", nonCashSales, size = 22, bold = true)
+                    if (nonCashBreakdown.isNotEmpty()) {
+                        for ((method, amount) in nonCashBreakdown) {
+                            s.printTwoCols("  • $method:", amount, size = 20, bold = false)
+                        }
+                    } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
+                        s.printTwoCols("  • Card Sales:", cardSales, size = 20, bold = false)
+                    }
+                    s.printTwoCols("Paid In (+):", paidIn, size = 22, bold = false)
+                    s.printTwoCols("Paid Out (-):", paidOut, size = 22, bold = false)
+                    s.printDivider("-", 48)
+
+                    s.printTwoCols("Expected Cash:", expectedCash, size = 24, bold = true)
+                    s.printTwoCols("Actual Cash Count:", actualCash, size = 24, bold = true)
+                    s.printTwoCols("Difference / Variance:", difference, size = 24, bold = true)
+                    s.printDivider("-", 48)
                 }
-                s.printTwoCols("Paid In (+):", paidIn, size = 22, bold = false)
-                s.printTwoCols("Paid Out (-):", paidOut, size = 22, bold = false)
-                s.printDivider("-", 48)
-
-                s.printTwoCols("Expected Cash:", expectedCash, size = 24, bold = true)
-                s.printTwoCols("Actual Cash Count:", actualCash, size = 24, bold = true)
-                s.printTwoCols("Difference / Variance:", difference, size = 24, bold = true)
-                s.printDivider("-", 48)
 
                 s.feedAndCut(5)
                 onComplete(true, null)
@@ -850,6 +894,10 @@ class Z93PrinterManager(private val context: Context) {
                 val totalNetRevenue = (reportData["totalNetRevenue"] as? String) ?: netSales
 
                 val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+                val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+                val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    if (k != null && v != null) k.toString() to v.toString() else null
+                }?.toMap() ?: emptyMap()
                 val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
                 val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
                 val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
@@ -883,13 +931,22 @@ class Z93PrinterManager(private val context: Context) {
                 s.printDivider("-", 48)
 
                 s.printText("PAYMENTS / TENDER BREAKDOWN", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                s.printTwoCols("Cash Sales:", cashSales, size = 22, bold = false)
-                s.printTwoCols("Card Sales:", cardSales, size = 22, bold = false)
-                if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
-                    s.printTwoCols("QR / Online:", qrSales, size = 22, bold = false)
-                }
-                if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                    s.printTwoCols("Credit Sales:", creditSales, size = 22, bold = false)
+                s.printTwoCols("Cash Sales:", cashSales, size = 22, bold = true)
+                s.printTwoCols("Non-Cash Sales:", nonCashSales, size = 22, bold = true)
+                if (nonCashBreakdown.isNotEmpty()) {
+                    for ((method, amount) in nonCashBreakdown) {
+                        s.printTwoCols("  • $method:", amount, size = 20, bold = false)
+                    }
+                } else {
+                    if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) {
+                        s.printTwoCols("  • Card Sales:", cardSales, size = 20, bold = false)
+                    }
+                    if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
+                        s.printTwoCols("  • QR / Online:", qrSales, size = 20, bold = false)
+                    }
+                    if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
+                        s.printTwoCols("  • Credit Sales:", creditSales, size = 20, bold = false)
+                    }
                 }
                 s.printDivider("-", 48)
 

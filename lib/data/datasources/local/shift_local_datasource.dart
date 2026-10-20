@@ -14,6 +14,8 @@ class ShiftSummaryStats {
   final double totalReturnsAmount;
   final double totalNetRevenue;
   final double cashSales;
+  final double nonCashSales;
+  final Map<String, double> nonCashBreakdown;
   final double cardSales;
   final double qrSales;
   final double creditSales;
@@ -34,6 +36,8 @@ class ShiftSummaryStats {
     this.totalReturnsAmount = 0.0,
     this.totalNetRevenue = 0.0,
     required this.cashSales,
+    this.nonCashSales = 0.0,
+    this.nonCashBreakdown = const {},
     required this.cardSales,
     this.qrSales = 0.0,
     this.creditSales = 0.0,
@@ -291,6 +295,8 @@ class ShiftLocalDatasource {
     double totalTax = 0.0;
     double grandTotalSales = 0.0;
     double cashSales = 0.0;
+    double nonCashSales = 0.0;
+    final Map<String, double> nonCashBreakdown = {};
     double cardSales = 0.0;
     double qrSales = 0.0;
     double creditSales = 0.0;
@@ -302,6 +308,7 @@ class ShiftLocalDatasource {
       final tax = ((s[DatabaseConstants.colTax] as num?) ?? 0.0).toDouble();
       final grandTotal = ((s[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
       final paid = ((s[DatabaseConstants.colPaidAmount] as num?) ?? 0.0).toDouble();
+      final change = ((s[DatabaseConstants.colChangeAmount] as num?) ?? 0.0).toDouble();
       final rawMethod = s[DatabaseConstants.colPaymentMethod] as String?;
 
       grossSales += subtotal;
@@ -311,13 +318,18 @@ class ShiftLocalDatasource {
 
       // Accurately parse individual items in split/mixed payments
       final parsedItems = PaymentBreakdownHelper.parse(rawMethod, paid);
-      final agg = PaymentBreakdownHelper.aggregate(parsedItems);
+      final agg = PaymentBreakdownHelper.aggregateWithBreakdown(parsedItems, change: change);
 
       cashSales += agg.cash;
+      nonCashSales += agg.nonCash;
       cardSales += agg.card;
       qrSales += agg.qr;
       creditSales += agg.credit;
       otherSales += agg.other;
+
+      agg.nonCashBreakdown.forEach((method, amount) {
+        nonCashBreakdown[method] = (nonCashBreakdown[method] ?? 0.0) + amount;
+      });
     }
 
     int totalReturnsCount = returns.length;
@@ -330,9 +342,20 @@ class ShiftLocalDatasource {
       totalReturnsAmount += refund;
 
       final parsedItems = PaymentBreakdownHelper.parse(rawMethod, refund);
-      final agg = PaymentBreakdownHelper.aggregate(parsedItems);
-      cashRefunds += agg.cash;
+      for (final p in parsedItems) {
+        if (PaymentBreakdownHelper.isCash(p.method)) {
+          cashRefunds += p.amount;
+        } else {
+          final key = p.method.trim().toUpperCase();
+          nonCashBreakdown[key] = (nonCashBreakdown[key] ?? 0.0) - p.amount;
+          if (nonCashBreakdown[key]! <= 0) nonCashBreakdown.remove(key);
+          nonCashSales = (nonCashSales - p.amount).clamp(0.0, double.infinity);
+        }
+      }
     }
+
+    // Filter out zero or negative values in breakdown
+    nonCashBreakdown.removeWhere((k, v) => v <= 0.0);
 
     final totalNetRevenue = grandTotalSales - totalReturnsAmount;
     final double expectedCash = currentShift.openingBalance + cashSales + shiftPaidIn - shiftPaidOut - cashRefunds;
@@ -347,6 +370,8 @@ class ShiftLocalDatasource {
       totalReturnsAmount: totalReturnsAmount,
       totalNetRevenue: totalNetRevenue,
       cashSales: cashSales,
+      nonCashSales: nonCashSales,
+      nonCashBreakdown: nonCashBreakdown,
       cardSales: cardSales,
       qrSales: qrSales,
       creditSales: creditSales,
@@ -409,6 +434,8 @@ class ShiftLocalDatasource {
     double totalTax = 0.0;
     double grandTotalSales = 0.0;
     double cashSales = 0.0;
+    double nonCashSales = 0.0;
+    final Map<String, double> nonCashBreakdown = {};
     double cardSales = 0.0;
     double qrSales = 0.0;
     double creditSales = 0.0;
@@ -420,6 +447,7 @@ class ShiftLocalDatasource {
       final tax = ((s[DatabaseConstants.colTax] as num?) ?? 0.0).toDouble();
       final grandTotal = ((s[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
       final paid = ((s[DatabaseConstants.colPaidAmount] as num?) ?? 0.0).toDouble();
+      final change = ((s[DatabaseConstants.colChangeAmount] as num?) ?? 0.0).toDouble();
       final rawMethod = s[DatabaseConstants.colPaymentMethod] as String?;
 
       grossSales += subtotal;
@@ -428,13 +456,18 @@ class ShiftLocalDatasource {
       grandTotalSales += grandTotal;
 
       final parsedItems = PaymentBreakdownHelper.parse(rawMethod, paid);
-      final agg = PaymentBreakdownHelper.aggregate(parsedItems);
+      final agg = PaymentBreakdownHelper.aggregateWithBreakdown(parsedItems, change: change);
 
       cashSales += agg.cash;
+      nonCashSales += agg.nonCash;
       cardSales += agg.card;
       qrSales += agg.qr;
       creditSales += agg.credit;
       otherSales += agg.other;
+
+      agg.nonCashBreakdown.forEach((method, amount) {
+        nonCashBreakdown[method] = (nonCashBreakdown[method] ?? 0.0) + amount;
+      });
     }
 
     int totalReturnsCount = returns.length;
@@ -447,9 +480,20 @@ class ShiftLocalDatasource {
       totalReturnsAmount += refund;
 
       final parsedItems = PaymentBreakdownHelper.parse(rawMethod, refund);
-      final agg = PaymentBreakdownHelper.aggregate(parsedItems);
-      cashRefunds += agg.cash;
+      for (final p in parsedItems) {
+        if (PaymentBreakdownHelper.isCash(p.method)) {
+          cashRefunds += p.amount;
+        } else {
+          final key = p.method.trim().toUpperCase();
+          nonCashBreakdown[key] = (nonCashBreakdown[key] ?? 0.0) - p.amount;
+          if (nonCashBreakdown[key]! <= 0) nonCashBreakdown.remove(key);
+          nonCashSales = (nonCashSales - p.amount).clamp(0.0, double.infinity);
+        }
+      }
     }
+
+    // Filter out zero or negative values in breakdown
+    nonCashBreakdown.removeWhere((k, v) => v <= 0.0);
 
     final totalNetRevenue = grandTotalSales - totalReturnsAmount;
     final double expectedCash = day.openingBalance + cashSales + paidIn - paidOut - cashRefunds;
@@ -464,6 +508,8 @@ class ShiftLocalDatasource {
       totalReturnsAmount: totalReturnsAmount,
       totalNetRevenue: totalNetRevenue,
       cashSales: cashSales,
+      nonCashSales: nonCashSales,
+      nonCashBreakdown: nonCashBreakdown,
       cardSales: cardSales,
       qrSales: qrSales,
       creditSales: creditSales,

@@ -9,6 +9,7 @@ abstract class UserLocalDataSource {
   Future<int> insertUser(User user);
   Future<int> updateUser(User user);
   Future<int> deleteUser(int id);
+  Future<void> syncUsersFromRemote(List<User> remoteUsers);
 }
 
 class UserLocalDataSourceImpl implements UserLocalDataSource {
@@ -74,5 +75,37 @@ class UserLocalDataSourceImpl implements UserLocalDataSource {
       where: '${DatabaseConstants.colId} = ?',
       whereArgs: [id],
     );
+  }
+
+  @override
+  Future<void> syncUsersFromRemote(List<User> remoteUsers) async {
+    for (final remoteUser in remoteUsers) {
+      final existing = await _databaseService.query(
+        DatabaseConstants.tableUsers,
+        where: '${DatabaseConstants.colUsername} = ?',
+        whereArgs: [remoteUser.username],
+        limit: 1,
+      );
+
+      if (existing.isNotEmpty) {
+        final id = existing.first[DatabaseConstants.colId] as int;
+        await _databaseService.update(
+          DatabaseConstants.tableUsers,
+          {
+            DatabaseConstants.colDisplayName: remoteUser.displayName,
+            DatabaseConstants.colPin: remoteUser.pin,
+            DatabaseConstants.colRole: remoteUser.role,
+            DatabaseConstants.colActive: 1,
+          },
+          where: '${DatabaseConstants.colId} = ?',
+          whereArgs: [id],
+        );
+      } else {
+        await _databaseService.insert(
+          DatabaseConstants.tableUsers,
+          remoteUser.toMap(),
+        );
+      }
+    }
   }
 }

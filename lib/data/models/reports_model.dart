@@ -35,6 +35,8 @@ class TotalSalesReportData {
   final double totalReturnsAmount;
   final double totalNetRevenue;
   final double cashSales;
+  final double nonCashSales;
+  final Map<String, double> nonCashBreakdown;
   final double cardSales;
   final double qrSales;
   final double creditSales;
@@ -49,6 +51,8 @@ class TotalSalesReportData {
     required this.totalReturnsAmount,
     required this.totalNetRevenue,
     required this.cashSales,
+    this.nonCashSales = 0.0,
+    this.nonCashBreakdown = const {},
     required this.cardSales,
     required this.qrSales,
     required this.creditSales,

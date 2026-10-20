@@ -291,6 +291,8 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
     double totalTax = 0.0;
     double netSales = 0.0;
     double cashSales = 0.0;
+    double nonCashSales = 0.0;
+    final Map<String, double> nonCashBreakdown = {};
     double cardSales = 0.0;
     double qrSales = 0.0;
     double creditSales = 0.0;
@@ -301,6 +303,7 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       final tax = ((s[DatabaseConstants.colTax] as num?) ?? 0.0).toDouble();
       final grandTotal = ((s[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
       final paid = ((s[DatabaseConstants.colPaidAmount] as num?) ?? 0.0).toDouble();
+      final change = ((s[DatabaseConstants.colChangeAmount] as num?) ?? 0.0).toDouble();
       final rawMethod = s[DatabaseConstants.colPaymentMethod] as String?;
 
       grossSales += subtotal;
@@ -309,19 +312,38 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       netSales += grandTotal;
 
       final parsedItems = PaymentBreakdownHelper.parse(rawMethod, paid);
-      final agg = PaymentBreakdownHelper.aggregate(parsedItems);
+      final agg = PaymentBreakdownHelper.aggregateWithBreakdown(parsedItems, change: change);
 
       cashSales += agg.cash;
+      nonCashSales += agg.nonCash;
       cardSales += agg.card;
       qrSales += agg.qr;
       creditSales += agg.credit;
+
+      agg.nonCashBreakdown.forEach((method, amount) {
+        nonCashBreakdown[method] = (nonCashBreakdown[method] ?? 0.0) + amount;
+      });
     }
 
     int totalReturnsCount = returnedSales.length;
     double totalReturnsAmount = 0.0;
     for (final r in returnedSales) {
-      totalReturnsAmount += ((r[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
+      final refund = ((r[DatabaseConstants.colGrandTotal] as num?) ?? 0.0).toDouble();
+      final rawMethod = r[DatabaseConstants.colPaymentMethod] as String?;
+      totalReturnsAmount += refund;
+
+      final parsedItems = PaymentBreakdownHelper.parse(rawMethod, refund);
+      for (final p in parsedItems) {
+        if (!PaymentBreakdownHelper.isCash(p.method)) {
+          final key = p.method.trim().toUpperCase();
+          nonCashBreakdown[key] = (nonCashBreakdown[key] ?? 0.0) - p.amount;
+          if (nonCashBreakdown[key]! <= 0) nonCashBreakdown.remove(key);
+          nonCashSales = (nonCashSales - p.amount).clamp(0.0, double.infinity);
+        }
+      }
     }
+
+    nonCashBreakdown.removeWhere((k, v) => v <= 0.0);
 
     final totalNetRevenue = netSales - totalReturnsAmount;
 
@@ -335,6 +357,8 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       totalReturnsAmount: totalReturnsAmount,
       totalNetRevenue: totalNetRevenue,
       cashSales: cashSales,
+      nonCashSales: nonCashSales,
+      nonCashBreakdown: nonCashBreakdown,
       cardSales: cardSales,
       qrSales: qrSales,
       creditSales: creditSales,

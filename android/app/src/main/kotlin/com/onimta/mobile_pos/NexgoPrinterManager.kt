@@ -520,6 +520,10 @@ class NexgoPrinterManager(private val context: Context) {
                 val netSales = reportData["netSales"] as? String ?: "LKR 0.00"
 
                 val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+                val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+                val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    if (k != null && v != null) k.toString() to v.toString() else null
+                }?.toMap() ?: emptyMap()
                 val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
                 val otherSales = reportData["otherSales"] as? String ?: "LKR 0.00"
 
@@ -543,10 +547,14 @@ class NexgoPrinterManager(private val context: Context) {
                 printLine("--------------------------------", 20, alignCenter, false)
 
                 printLine("PAYMENTS BREAKDOWN", 20, alignLeft, true)
-                printTwoCols("Cash Sales:", cashSales, 20, false)
-                printTwoCols("Card Sales:", cardSales, 20, false)
-                if (otherSales != "LKR 0.00" && otherSales.isNotEmpty()) {
-                    printTwoCols("Other / Credit:", otherSales, 20, false)
+                printTwoCols("Cash Sales:", cashSales, 20, true)
+                printTwoCols("Non-Cash Sales:", nonCashSales, 20, true)
+                if (nonCashBreakdown.isNotEmpty()) {
+                    for ((method, amount) in nonCashBreakdown) {
+                        printTwoCols("  • $method:", amount, 18, false)
+                    }
+                } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
+                    printTwoCols("  • Card Sales:", cardSales, 18, false)
                 }
                 printLine("--------------------------------", 20, alignCenter, false)
 
@@ -1106,6 +1114,10 @@ class NexgoPrinterManager(private val context: Context) {
             val totalNetRevenue = reportData["totalNetRevenue"] as? String ?: "LKR 0.00"
 
             val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+            val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+            val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                if (k != null && v != null) k.toString() to v.toString() else null
+            }?.toMap() ?: emptyMap()
             val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
             val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
             val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
@@ -1139,13 +1151,22 @@ class NexgoPrinterManager(private val context: Context) {
             printLine("--------------------------------", 20, alignCenter, false)
 
             printLine("PAYMENTS / TENDER BREAKDOWN", 20, alignLeft, true)
-            printTwoCols("Cash Sales:", cashSales, 20, false)
-            printTwoCols("Card Sales:", cardSales, 20, false)
-            if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
-                printTwoCols("QR / Online:", qrSales, 20, false)
-            }
-            if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                printTwoCols("Credit Sales:", creditSales, 20, false)
+            printTwoCols("Cash Sales:", cashSales, 20, true)
+            printTwoCols("Non-Cash Sales:", nonCashSales, 20, true)
+            if (nonCashBreakdown.isNotEmpty()) {
+                for ((method, amount) in nonCashBreakdown) {
+                    printTwoCols("  • $method:", amount, 18, false)
+                }
+            } else {
+                if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) {
+                    printTwoCols("  • Card Sales:", cardSales, 20, false)
+                }
+                if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
+                    printTwoCols("  • QR / Online:", qrSales, 20, false)
+                }
+                if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
+                    printTwoCols("  • Credit Sales:", creditSales, 20, false)
+                }
             }
             printLine("--------------------------------", 20, alignCenter, false)
 

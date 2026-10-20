@@ -38,6 +38,11 @@ import '../../features/settings/screens/sync_logs_screen.dart';
 import '../../features/shift/screens/end_shift_screen.dart';
 import '../../features/shift/screens/start_shift_screen.dart';
 import '../../features/splash/screens/splash_screen.dart';
+import '../../core/services/cashier_permissions_service.dart';
+import '../../data/repositories/settings_repository.dart';
+import '../../data/repositories/user_repository.dart';
+import '../../features/settings/screens/api_config_screen.dart';
+import '../../features/settings/screens/cashier_permissions_screen.dart';
 import 'app_routes.dart';
 
 /// Central RouteGenerator dispatching named routes with controller & repository dependencies
@@ -54,6 +59,9 @@ class RouteGenerator {
   final ProductRepository productRepository;
   final SyncLogRepository syncLogRepository;
   final BillSyncRepository? billSyncRepository;
+  final UserRepository? userRepository;
+  final SettingsRepository? settingsRepository;
+  final CashierPermissionsService? cashierPermissionsService;
 
   RouteGenerator({
     required this.authService,
@@ -68,6 +76,9 @@ class RouteGenerator {
     required this.productRepository,
     required this.syncLogRepository,
     this.billSyncRepository,
+    this.userRepository,
+    this.settingsRepository,
+    this.cashierPermissionsService,
   });
 
   Route<dynamic> generateRoute(RouteSettings settings) {
@@ -126,6 +137,7 @@ class RouteGenerator {
             posController: posController,
             productRepository: productRepository,
             productController: productController,
+            permissionsService: cashierPermissionsService,
           ),
           settings,
         );
@@ -288,6 +300,30 @@ class RouteGenerator {
       case AppRoutes.returnItem:
         return _buildRoute(
           ReturnScreen(controller: posController),
+          settings,
+        );
+
+      case AppRoutes.apiBaseUrl:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final isInitialSetup = args?['isInitialSetup'] as bool? ?? false;
+        final initialError = args?['initialErrorMessage'] as String?;
+        return _buildRoute(
+          ApiConfigScreen(
+            authService: authService,
+            settingsRepository: settingsRepository!,
+            isInitialSetup: isInitialSetup,
+            initialErrorMessage: initialError,
+          ),
+          settings,
+        );
+
+      case AppRoutes.cashierPermissions:
+        return _buildRoute(
+          CashierPermissionsScreen(
+            authService: authService,
+            userRepository: userRepository!,
+            permissionsService: cashierPermissionsService!,
+          ),
           settings,
         );
 

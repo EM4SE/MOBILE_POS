@@ -26,4 +26,6 @@ class AppRoutes {
   static const String reportXReading = '/reports/x-reading';
   static const String reportZReading = '/reports/z-reading';
   static const String syncLogs = '/sync-logs';
+  static const String apiBaseUrl = '/api-base-url';
+  static const String cashierPermissions = '/cashier-permissions';
 }

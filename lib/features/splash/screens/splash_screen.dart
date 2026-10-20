@@ -35,6 +35,12 @@ class _SplashScreenState extends State<SplashScreen> {
         widget.shiftService.checkActiveSession(),
       ]);
 
+      // Load cashiers from ERP server via sp_Android_Common_API @Iid = 8
+      final cashiers = await widget.authService.syncCashiersFromApi().timeout(const Duration(seconds: 10));
+      if (cashiers.isEmpty) {
+        throw Exception('No cashiers returned from ERP server');
+      }
+
       if (!mounted) return;
 
       final user = widget.authService.currentUser.value;
@@ -56,9 +62,17 @@ class _SplashScreenState extends State<SplashScreen> {
       } else {
         Navigator.of(context).pushReplacementNamed(AppRoutes.login);
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Could not load cashiers on startup: $e');
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+      // If failed to load cashiers, load API Base URL set screen
+      Navigator.of(context).pushReplacementNamed(
+        AppRoutes.apiBaseUrl,
+        arguments: {
+          'isInitialSetup': true,
+          'initialErrorMessage': 'Could not load cashiers from ERP ($e)',
+        },
+      );
     }
   }
 

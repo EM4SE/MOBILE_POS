@@ -525,6 +525,10 @@ class Z92PrinterManager(private val context: Context) {
                     val netSales = reportData["netSales"] as? String ?: "LKR 0.00"
 
                     val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+                    val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+                    val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                        if (k != null && v != null) k.toString() to v.toString() else null
+                    }?.toMap() ?: emptyMap()
                     val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
                     val otherSales = reportData["otherSales"] as? String ?: "LKR 0.00"
 
@@ -548,10 +552,14 @@ class Z92PrinterManager(private val context: Context) {
                     s.printDivider("-", 32)
 
                     s.printText("PAYMENTS BREAKDOWN", size = 20, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                    s.printTwoCols("Cash Sales:", cashSales, size = 20, bold = false)
-                    s.printTwoCols("Card Sales:", cardSales, size = 20, bold = false)
-                    if (otherSales != "LKR 0.00" && otherSales.isNotEmpty()) {
-                        s.printTwoCols("Other / Credit:", otherSales, size = 20, bold = false)
+                    s.printTwoCols("Cash Sales:", cashSales, size = 20, bold = true)
+                    s.printTwoCols("Non-Cash Sales:", nonCashSales, size = 20, bold = true)
+                    if (nonCashBreakdown.isNotEmpty()) {
+                        for ((method, amount) in nonCashBreakdown) {
+                            s.printTwoCols("  • $method:", amount, size = 18, bold = false)
+                        }
+                    } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
+                        s.printTwoCols("  • Card Sales:", cardSales, size = 18, bold = false)
                     }
                     s.printDivider("-", 32)
 
@@ -897,6 +905,10 @@ class Z92PrinterManager(private val context: Context) {
                 val totalNetRevenue = (reportData["totalNetRevenue"] as? String) ?: netSales
 
                 val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
+                val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
+                val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    if (k != null && v != null) k.toString() to v.toString() else null
+                }?.toMap() ?: emptyMap()
                 val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
                 val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
                 val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
@@ -930,13 +942,22 @@ class Z92PrinterManager(private val context: Context) {
                 s.printDivider("-", 32)
 
                 s.printText("PAYMENTS / TENDER BREAKDOWN", size = 20, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                s.printTwoCols("Cash Sales:", cashSales, size = 20, bold = false)
-                s.printTwoCols("Card Sales:", cardSales, size = 20, bold = false)
-                if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
-                    s.printTwoCols("QR / Online:", qrSales, size = 20, bold = false)
-                }
-                if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                    s.printTwoCols("Credit Sales:", creditSales, size = 20, bold = false)
+                s.printTwoCols("Cash Sales:", cashSales, size = 20, bold = true)
+                s.printTwoCols("Non-Cash Sales:", nonCashSales, size = 20, bold = true)
+                if (nonCashBreakdown.isNotEmpty()) {
+                    for ((method, amount) in nonCashBreakdown) {
+                        s.printTwoCols("  • $method:", amount, size = 18, bold = false)
+                    }
+                } else {
+                    if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) {
+                        s.printTwoCols("  • Card Sales:", cardSales, size = 18, bold = false)
+                    }
+                    if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
+                        s.printTwoCols("  • QR / Online:", qrSales, size = 18, bold = false)
+                    }
+                    if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
+                        s.printTwoCols("  • Credit Sales:", creditSales, size = 18, bold = false)
+                    }
                 }
                 s.printDivider("-", 32)
 

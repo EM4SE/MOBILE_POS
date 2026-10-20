@@ -17,6 +17,8 @@ import 'data/datasources/local/sync_log_local_datasource.dart';
 import 'data/datasources/local/user_local_datasource.dart';
 import 'data/datasources/remote/bill_sync_remote_datasource.dart';
 import 'data/datasources/remote/payment_remote_datasource.dart';
+import 'data/datasources/remote/shift_remote_datasource.dart';
+import 'data/datasources/remote/user_remote_datasource.dart';
 import 'data/repositories/bill_sync_repository.dart';
 import 'data/repositories/customer_repository.dart';
 import 'data/repositories/exchange_repository.dart';
@@ -27,6 +29,7 @@ import 'data/repositories/settings_repository.dart';
 import 'data/repositories/shift_repository.dart';
 import 'data/repositories/sync_log_repository.dart';
 import 'data/repositories/user_repository.dart';
+import 'core/services/cashier_permissions_service.dart';
 import 'core/services/shift_service.dart';
 import 'features/authentication/controllers/login_controller.dart';
 import 'features/customers/controllers/customer_controller.dart';
@@ -65,10 +68,16 @@ void main() async {
   final SyncLogLocalDataSource syncLogLocalDataSource = SyncLogLocalDataSourceImpl(databaseService);
   final PaymentRemoteDataSource paymentRemoteDataSource = PaymentRemoteDataSourceImpl(apiService);
   final BillSyncRemoteDataSource billSyncRemoteDataSource = BillSyncRemoteDataSourceImpl(apiService);
+  final ShiftRemoteDataSource shiftRemoteDataSource = ShiftRemoteDataSourceImpl(apiService);
+  final UserRemoteDataSource userRemoteDataSource = UserRemoteDataSourceImpl(apiService);
 
   // 3. Repository Layer
   final SyncLogRepository syncLogRepository = SyncLogRepositoryImpl(syncLogLocalDataSource);
-  final UserRepository userRepository = UserRepositoryImpl(userLocalDataSource);
+  final UserRepository userRepository = UserRepositoryImpl(
+    userLocalDataSource,
+    userRemoteDataSource,
+    syncLogRepository,
+  );
   final ProductRepository productRepository = ProductRepositoryImpl(
     productLocalDataSource,
     null,
@@ -97,7 +106,11 @@ void main() async {
 
   // 4. Core Authentication & Shift Services
   final AuthenticationService authService = AuthenticationServiceImpl(userRepository);
-  final ShiftService shiftService = ShiftServiceImpl(shiftRepository);
+  final ShiftService shiftService = ShiftServiceImpl(
+    shiftRepository,
+    shiftRemoteDataSource,
+    syncLogRepository,
+  );
 
   // 5. Feature Controllers
   final LoginController loginController = LoginController(authService);
@@ -115,6 +128,7 @@ void main() async {
   final ProductController productController = ProductController(productRepository);
   final CustomerController customerController = CustomerController(customerRepository);
   final SettingsController settingsController = SettingsController(settingsRepository);
+  final CashierPermissionsService cashierPermissionsService = CashierPermissionsService(settingsRepository);
 
   // 6. Central Route Generator
   final RouteGenerator routeGenerator = RouteGenerator(
@@ -130,6 +144,9 @@ void main() async {
     productRepository: productRepository,
     syncLogRepository: syncLogRepository,
     billSyncRepository: billSyncRepository,
+    userRepository: userRepository,
+    settingsRepository: settingsRepository,
+    cashierPermissionsService: cashierPermissionsService,
   );
 
   runApp(PosApp(routeGenerator: routeGenerator));
