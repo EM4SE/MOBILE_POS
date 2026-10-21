@@ -34,6 +34,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var selectedDevice = "NEXGO_N5"
+    private var printerFont = "MONOSPACE"
     private var nexgoPrinter: NexgoPrinterManager? = null
     private var wpos3Printer: Wpos3PrinterManager? = null
     private var dblZ92Printer: Z92PrinterManager? = null
@@ -117,6 +118,29 @@ class MainActivity : FlutterActivity() {
                     selectedDevice = device
                     Log.d(TAG, "Printer target device switched to: $selectedDevice")
                     result.success(true)
+                }
+
+                "setPrinterFont" -> {
+                    val font = call.argument<String>("font") ?: "MONOSPACE"
+                    printerFont = font
+                    dblZ92Printer?.activeFont = font
+                    dblZ93Printer?.activeFont = font
+                    Log.d(TAG, "Printer font updated to: $font")
+                    result.success(true)
+                }
+
+                "printFontTest" -> {
+                    val font = call.argument<String>("font") ?: printerFont
+                    printerFont = font
+                    dblZ92Printer?.activeFont = font
+                    dblZ93Printer?.activeFont = font
+                    executePrint(
+                        result,
+                        printOnZ93 = { p, cb -> p.printFontTest(font, cb) },
+                        printOnZ92 = { p, cb -> p.printFontTest(font, cb) },
+                        printOnWpos3 = { _, cb -> cb(true, null) },
+                        printOnNexgo = { _, cb -> cb(true, null) }
+                    )
                 }
 
                 "isPrinterAvailable" -> {
@@ -267,8 +291,8 @@ class MainActivity : FlutterActivity() {
         printOnWpos3: (Wpos3PrinterManager, (Boolean, String?) -> Unit) -> Unit,
         printOnNexgo: (NexgoPrinterManager, (Boolean, String?) -> Unit) -> Unit
     ) {
-        val z93 = dblZ93Printer ?: Z93PrinterManager(applicationContext).also { dblZ93Printer = it }
-        val z92 = dblZ92Printer ?: Z92PrinterManager(applicationContext).also { dblZ92Printer = it }
+        val z93 = (dblZ93Printer ?: Z93PrinterManager(applicationContext).also { dblZ93Printer = it }).apply { activeFont = printerFont }
+        val z92 = (dblZ92Printer ?: Z92PrinterManager(applicationContext).also { dblZ92Printer = it }).apply { activeFont = printerFont }
         val wpos = wpos3Printer ?: Wpos3PrinterManager(applicationContext).also { wpos3Printer = it }
         val nexgo = nexgoPrinter ?: NexgoPrinterManager(applicationContext).also { nexgoPrinter = it }
 

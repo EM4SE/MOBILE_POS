@@ -51,6 +51,24 @@ class SettingsController extends ChangeNotifier {
     }
   }
 
+  String get printerFont => _settings['printer_font'] ?? 'MONOSPACE';
+
+  String get printerFontDisplayName {
+    switch (printerFont.toUpperCase()) {
+      case 'SANS_SERIF':
+        return 'Sans-Serif (Modern / Clean)';
+      case 'SERIF':
+        return 'Serif (Classic / Elegant)';
+      case 'DEFAULT_BOLD':
+        return 'Default Bold (High Contrast)';
+      case 'DEFAULT':
+        return 'Standard System Default';
+      case 'MONOSPACE':
+      default:
+        return 'Monospace (Standard POS Alignment)';
+    }
+  }
+
   Future<void> loadSettings() async {
     _isLoading = true;
     _errorMessage = null;
@@ -60,6 +78,7 @@ class SettingsController extends ChangeNotifier {
       _settings = await _settingsRepository.getAllSettings();
       _isLoading = false;
       PrinterService.setSelectedDevice(selectedDevice);
+      PrinterService.setPrinterFont(printerFont);
       if (_settings.containsKey('api_base_url')) {
         ApiService.setBaseUrl(_settings['api_base_url']);
       } else {
@@ -79,6 +98,8 @@ class SettingsController extends ChangeNotifier {
       _settings[key] = value;
       if (key == 'selected_device') {
         PrinterService.setSelectedDevice(value);
+      } else if (key == 'printer_font') {
+        PrinterService.setPrinterFont(value);
       } else if (key == 'api_base_url') {
         ApiService.setBaseUrl(value);
       }
@@ -97,6 +118,9 @@ class SettingsController extends ChangeNotifier {
       _settings.addAll(newSettings);
       if (newSettings.containsKey('selected_device')) {
         PrinterService.setSelectedDevice(newSettings['selected_device']!);
+      }
+      if (newSettings.containsKey('printer_font')) {
+        PrinterService.setPrinterFont(newSettings['printer_font']!);
       }
       if (newSettings.containsKey('api_base_url')) {
         ApiService.setBaseUrl(newSettings['api_base_url']!);

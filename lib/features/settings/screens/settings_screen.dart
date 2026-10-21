@@ -556,6 +556,191 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showPrinterFontDialog() {
+    String selectedFont = widget.controller.printerFont;
+    bool isTesting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setModalState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.font_download_outlined, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Receipt Printer Font Style', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Select the typeface used for thermal receipt printing on your DBL Z92 / Z93 terminal:',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Option 1: Monospace
+                  _buildFontOptionTile(
+                    title: 'Monospace (Recommended)',
+                    subtitle: 'Even character widths for aligned price columns and item rows.',
+                    value: 'MONOSPACE',
+                    groupValue: selectedFont,
+                    previewStyle: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13),
+                    onChanged: (val) => setModalState(() => selectedFont = val),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Option 2: Sans-Serif
+                  _buildFontOptionTile(
+                    title: 'Sans-Serif (Modern & Clean)',
+                    subtitle: 'Clean modern typography without serifs. Sleek contemporary look.',
+                    value: 'SANS_SERIF',
+                    groupValue: selectedFont,
+                    previewStyle: const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.w600, fontSize: 13),
+                    onChanged: (val) => setModalState(() => selectedFont = val),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Option 3: Serif
+                  _buildFontOptionTile(
+                    title: 'Serif (Classic & Elegant)',
+                    subtitle: 'Traditional serif letterforms for boutique and specialty stores.',
+                    value: 'SERIF',
+                    groupValue: selectedFont,
+                    previewStyle: const TextStyle(fontFamily: 'serif', fontWeight: FontWeight.normal, fontSize: 13),
+                    onChanged: (val) => setModalState(() => selectedFont = val),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Option 4: Default Bold
+                  _buildFontOptionTile(
+                    title: 'Default Bold (High Contrast)',
+                    subtitle: 'Extra thick stroke density for maximum legibility in bright light.',
+                    value: 'DEFAULT_BOLD',
+                    groupValue: selectedFont,
+                    previewStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                    onChanged: (val) => setModalState(() => selectedFont = val),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Option 5: Standard Default
+                  _buildFontOptionTile(
+                    title: 'System Default',
+                    subtitle: 'Standard Android device system font.',
+                    value: 'DEFAULT',
+                    groupValue: selectedFont,
+                    previewStyle: const TextStyle(fontSize: 13),
+                    onChanged: (val) => setModalState(() => selectedFont = val),
+                  ),
+
+                  const SizedBox(height: AppDimensions.md),
+
+                  Center(
+                    child: isTesting
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                SizedBox(width: 10),
+                                Text('Printing font test slip...', style: TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          )
+                        : OutlinedButton.icon(
+                            icon: const Icon(Icons.print, size: 18),
+                            label: const Text('Test Print Font Slip'),
+                            onPressed: () async {
+                              setModalState(() => isTesting = true);
+                              final res = await PrinterService.printFontTest(selectedFont);
+                              setModalState(() => isTesting = false);
+                              if (mounted) {
+                                AppDialog.showSnackBar(
+                                  context,
+                                  res.success
+                                      ? 'Font test slip printed with "$selectedFont"'
+                                      : 'Printer error: ${res.message ?? "Offline / Paper out"}',
+                                );
+                              }
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            AppButton(
+              label: 'Cancel',
+              variant: AppButtonVariant.outline,
+              width: 100,
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+            AppButton(
+              label: 'Apply & Save',
+              variant: AppButtonVariant.primary,
+              width: 130,
+              onPressed: () async {
+                await widget.controller.updateSetting('printer_font', selectedFont);
+                await PrinterService.setPrinterFont(selectedFont);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  AppDialog.showSnackBar(context, 'Receipt printer font set to $selectedFont');
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFontOptionTile({
+    required String title,
+    required String subtitle,
+    required String value,
+    required String groupValue,
+    required TextStyle previewStyle,
+    required ValueChanged<String> onChanged,
+  }) {
+    final isSelected = value == groupValue;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isSelected ? AppColors.primary : AppColors.border,
+          width: isSelected ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(4),
+        color: isSelected ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+      ),
+      child: RadioListTile<String>(
+        value: value,
+        groupValue: groupValue,
+        dense: true,
+        title: Row(
+          children: [
+            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+            Text('Abc 123', style: previewStyle.copyWith(color: isSelected ? AppColors.primary : AppColors.textPrimary)),
+          ],
+        ),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
+        onChanged: (val) {
+          if (val != null) onChanged(val);
+        },
+      ),
+    );
+  }
+
   void _showDatabaseSettingsDialog() {
     showDialog(
       context: context,
@@ -789,6 +974,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.point_of_sale,
                     iconColor: const Color(0xFF0D9488),
                     onTap: _showDeviceSelectionDialog,
+                  ),
+
+                  const SizedBox(height: AppDimensions.sm),
+
+                  // Receipt Printer Font Tile
+                  SettingsTile(
+                    title: 'Receipt Printer Font',
+                    description: 'Active Font: ${widget.controller.printerFontDisplayName} (Tap to change style & test print)',
+                    icon: Icons.font_download_outlined,
+                    iconColor: const Color(0xFF8B5CF6),
+                    onTap: _showPrinterFontDialog,
                   ),
 
                   const SizedBox(height: AppDimensions.sm),

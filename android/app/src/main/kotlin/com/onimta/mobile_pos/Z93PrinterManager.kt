@@ -35,6 +35,8 @@ class Z93PrinterManager(private val context: Context) {
     private var printer: Printer? = null
     private var isInitialized = false
 
+    var activeFont: String = "MONOSPACE"
+
     init {
         initSdk()
     }
@@ -87,9 +89,34 @@ class Z93PrinterManager(private val context: Context) {
     // NATIVE 80MM (576-DOT) THERMAL PRINTING ENGINE
     // =========================================================================
 
-    private class NativePrinterSession(private val p: Printer, private val context: Context) {
+    private inner class NativePrinterSession(
+        private val p: Printer,
+        private val context: Context,
+        private val fontType: String = activeFont
+    ) {
         companion object {
             const val PAPER_WIDTH = 576 // 80mm thermal paper = 576 dots
+        }
+
+        private fun getPrnFont(): PrnTextFont {
+            return when (fontType.uppercase()) {
+                "SANS_SERIF" -> PrnTextFont.SANS_SERIF
+                "SERIF" -> PrnTextFont.SERIF
+                "DEFAULT_BOLD" -> PrnTextFont.DEFAULT_BOLD
+                "DEFAULT" -> PrnTextFont.DEFAULT
+                else -> PrnTextFont.MONOSPACE
+            }
+        }
+
+        private fun getTypeface(bold: Boolean): Typeface {
+            val base = when (fontType.uppercase()) {
+                "SANS_SERIF" -> Typeface.SANS_SERIF
+                "SERIF" -> Typeface.SERIF
+                "DEFAULT_BOLD" -> Typeface.DEFAULT_BOLD
+                "DEFAULT" -> Typeface.DEFAULT
+                else -> Typeface.MONOSPACE
+            }
+            return Typeface.create(base, if (bold) Typeface.BOLD else Typeface.NORMAL)
         }
 
         init {
@@ -120,7 +147,7 @@ class Z93PrinterManager(private val context: Context) {
             try {
                 val format = PrnStrFormat().apply {
                     textSize = size
-                    font = PrnTextFont.MONOSPACE
+                    font = getPrnFont()
                     style = if (bold) PrnTextStyle.BOLD else PrnTextStyle.NORMAL
                     ali = align
                 }
@@ -139,7 +166,7 @@ class Z93PrinterManager(private val context: Context) {
             try {
                 val paint = Paint().apply {
                     textSize = size.toFloat()
-                    typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
+                    typeface = getTypeface(bold)
                     color = Color.BLACK
                     isAntiAlias = false
                     if (bold) {
@@ -200,7 +227,7 @@ class Z93PrinterManager(private val context: Context) {
             try {
                 val paint = Paint().apply {
                     textSize = size.toFloat()
-                    typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
+                    typeface = getTypeface(bold)
                     color = Color.BLACK
                     isAntiAlias = false
                     if (bold) {
@@ -333,10 +360,10 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = receiptData["appName"] as? String ?: "ONIMTA POS"
-                val invoiceNo = receiptData["invoiceNo"] as? String ?: ""
-                val customerName = receiptData["customerName"] as? String ?: "Walk-in Customer"
-                val cashierName = receiptData["cashierName"] as? String ?: "Admin"
+                val appName = (receiptData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val invoiceNo = (receiptData["invoiceNo"] as? String ?: "").uppercase()
+                val customerName = (receiptData["customerName"] as? String ?: "WALK-IN CUSTOMER").uppercase()
+                val cashierName = (receiptData["cashierName"] as? String ?: "ADMIN").uppercase()
                 val dateStr = receiptData["dateTime"] as? String ?: ""
                 val items = receiptData["items"] as? List<Map<String, Any?>> ?: emptyList()
                 val subtotal = receiptData["subtotal"] as? String ?: ""
@@ -354,64 +381,67 @@ class Z93PrinterManager(private val context: Context) {
                 s.printDivider("-", 48)
 
                 // 2. Invoice Info
-                s.printTwoCols("Invoice #:", invoiceNo, size = 24, bold = true)
-                if (dateStr.isNotEmpty()) s.printTwoCols("Date:", dateStr, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashierName, size = 22, bold = false)
-                s.printTwoCols("Customer:", customerName, size = 22, bold = false)
+                s.printTwoCols("INVOICE #:", invoiceNo, size = 24, bold = true)
+                if (dateStr.isNotEmpty()) s.printTwoCols("DATE:", dateStr, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashierName, size = 22, bold = false)
+                s.printTwoCols("CUSTOMER:", customerName, size = 22, bold = false)
                 s.printDivider("-", 48)
 
                 // 3. Items List
-                s.printText("ITEM DESCRIPTION", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printTwoCols("LN  PRODUCT", "PRICE  QTY   TOTAL", size = 22, bold = true)
                 s.printDivider("-", 48)
 
+                var ln = 1
                 for (item in items) {
-                    val desc = item["description"] as? String ?: ""
+                    val desc = (item["description"] as? String ?: "").uppercase()
                     val qty = item["qty"] as? String ?: "1"
                     val price = item["price"] as? String ?: ""
                     val itemDisc = item["discount"] as? String ?: ""
                     val total = item["total"] as? String ?: ""
 
-                    s.printText(desc, size = 24, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                    s.printTwoCols("  $qty x $price", total, size = 22, bold = false)
+                    s.printText(String.format("%2d. %s", ln, desc), size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                    val priceQtyTotal = String.format("%10s %5s %12s", price, qty, total)
+                    s.printText(priceQtyTotal, size = 22, bold = false, align = Layout.Alignment.ALIGN_OPPOSITE)
                     if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00" && itemDisc != "0.00") {
-                        s.printTwoCols("    Item Disc:", "-$itemDisc", size = 20, bold = false)
+                        s.printTwoCols("    ITEM DISC:", "-$itemDisc", size = 20, bold = false)
                     }
+                    ln++
                 }
                 s.printDivider("-", 48)
 
                 // 4. Financial Summary
-                s.printTwoCols("Subtotal:", subtotal, size = 24, bold = false)
+                s.printTwoCols("SUBTOTAL:", subtotal, size = 24, bold = false)
                 if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-                    s.printTwoCols("Discount:", "-$discount", size = 24, bold = false)
+                    s.printTwoCols("DISCOUNT:", "-$discount", size = 24, bold = false)
                 }
                 if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00" && exchangeCredit != "0.00") {
-                    s.printTwoCols("Exchange Credit:", "-$exchangeCredit", size = 24, bold = false)
+                    s.printTwoCols("EXCHANGE CREDIT:", "-$exchangeCredit", size = 24, bold = false)
                 }
                 if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-                    s.printTwoCols("Tax:", tax, size = 24, bold = false)
+                    s.printTwoCols("TAX:", tax, size = 24, bold = false)
                 }
-                s.printDivider("-", 48)
+                s.printDivider("=", 48)
                 s.printTwoCols("GRAND TOTAL:", grandTotal, size = 28, bold = true)
-                s.printDivider("-", 48)
+                s.printDivider("=", 48)
 
                 // 5. Payments Breakdown
                 if (payments.isNotEmpty()) {
                     s.printText("PAYMENTS:", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
                     for (pay in payments) {
-                        val method = pay["method"] as? String ?: "Payment"
+                        val method = (pay["method"] as? String ?: "PAYMENT").uppercase()
                         val amt = pay["amount"] as? String ?: ""
                         s.printTwoCols(method, amt, size = 22, bold = false)
                     }
                 }
-                if (totalPaid.isNotEmpty()) s.printTwoCols("Total Paid:", totalPaid, size = 24, bold = true)
+                if (totalPaid.isNotEmpty()) s.printTwoCols("TOTAL PAID:", totalPaid, size = 24, bold = true)
                 if (change.isNotEmpty() && change != "LKR 0.00" && change != "0.00") {
-                    s.printTwoCols("Change Returned:", change, size = 24, bold = true)
+                    s.printTwoCols("CHANGE RETURNED:", change, size = 24, bold = true)
                 }
                 s.printDivider("-", 48)
 
                 // 6. Footer & Clear paper feed
                 s.printText("THANK YOU FOR SHOPPING WITH US!", size = 22, bold = true, align = Layout.Alignment.ALIGN_CENTER)
-                s.printText("Please come again", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
+                s.printText("PLEASE COME AGAIN", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
 
                 s.feedAndCut(5)
                 Log.d(TAG, "DBL Z93 80mm sale receipt printed cleanly")
@@ -439,30 +469,30 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = movementData["appName"] as? String ?: "ONIMTA POS"
-                val type = movementData["type"] as? String ?: "PAID IN"
+                val appName = (movementData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val type = (movementData["type"] as? String ?: "PAID IN").uppercase()
                 val amount = movementData["amount"] as? String ?: "LKR 0.00"
-                val reason = movementData["reason"] as? String ?: "Cash Movement"
-                val cashier = movementData["cashier"] as? String ?: "Admin"
+                val reason = (movementData["reason"] as? String ?: "CASH MOVEMENT").uppercase()
+                val cashier = (movementData["cashier"] as? String ?: "ADMIN").uppercase()
                 val dateStr = movementData["dateTime"] as? String ?: ""
 
                 s.printText(appName, size = 30, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printText("CASH MOVEMENT / VOUCHER", size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Transaction:", type, size = 24, bold = true)
-                s.printTwoCols("Amount:", amount, size = 26, bold = true)
+                s.printTwoCols("TRANSACTION:", type, size = 24, bold = true)
+                s.printTwoCols("AMOUNT:", amount, size = 26, bold = true)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Reason:", reason, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashier, size = 22, bold = false)
-                s.printTwoCols("Date & Time:", dateStr, size = 22, bold = false)
+                s.printTwoCols("REASON:", reason, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashier, size = 22, bold = false)
+                s.printTwoCols("DATE & TIME:", dateStr, size = 22, bold = false)
                 s.printDivider("-", 48)
 
                 s.printSpace(1)
-                s.printText("Authorized By: ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printText("AUTHORIZED BY: ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
                 s.printSpace(1)
-                s.printText("Received By:   ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printText("RECEIVED BY:   ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
                 s.printDivider("-", 48)
 
                 s.feedAndCut(5)
@@ -490,12 +520,12 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = shiftData["appName"] as? String ?: "ONIMTA POS"
-                val title = (shiftData["title"] as? String)?.takeIf { it.isNotEmpty() } ?: "SHIFT REPORT"
+                val appName = (shiftData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val title = ((shiftData["title"] as? String)?.takeIf { it.isNotEmpty() } ?: "SHIFT REPORT").uppercase()
                 val dayNumber = (shiftData["dayNumber"] as? String)?.takeIf { it.isNotEmpty() } ?: ""
                 val shiftNo = (shiftData["shiftNumber"] as? String)?.takeIf { it.isNotEmpty() }
                     ?: (shiftData["shiftNo"] as? String)?.takeIf { it.isNotEmpty() } ?: ""
-                val cashier = (shiftData["cashier"] as? String)?.takeIf { it.isNotEmpty() } ?: "Admin"
+                val cashier = ((shiftData["cashier"] as? String)?.takeIf { it.isNotEmpty() } ?: "ADMIN").uppercase()
                 val dateTime = (shiftData["dateTime"] as? String)?.takeIf { it.isNotEmpty() }
                     ?: (shiftData["startTime"] as? String) ?: ""
                 val openedAt = (shiftData["openedAt"] as? String)?.takeIf { it.isNotEmpty() } ?: ""
@@ -509,11 +539,11 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText(title, size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                if (dayNumber.isNotEmpty()) s.printTwoCols("Day #:", dayNumber, size = 22, bold = false)
-                if (shiftNo.isNotEmpty()) s.printTwoCols("Shift #:", shiftNo, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashier, size = 22, bold = false)
-                if (dateTime.isNotEmpty()) s.printTwoCols("Date / Time:", dateTime, size = 22, bold = false)
-                if (openedAt.isNotEmpty()) s.printTwoCols("Opened At:", openedAt, size = 22, bold = false)
+                if (dayNumber.isNotEmpty()) s.printTwoCols("DAY #:", dayNumber, size = 22, bold = false)
+                if (shiftNo.isNotEmpty()) s.printTwoCols("SHIFT #:", shiftNo, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashier, size = 22, bold = false)
+                if (dateTime.isNotEmpty()) s.printTwoCols("DATE / TIME:", dateTime, size = 22, bold = false)
+                if (openedAt.isNotEmpty()) s.printTwoCols("OPENED AT:", openedAt, size = 22, bold = false)
                 s.printDivider("-", 48)
 
                 if (!isEndReport) {
@@ -531,7 +561,7 @@ class Z93PrinterManager(private val context: Context) {
                     val cashSales = shiftData["cashSales"] as? String ?: "LKR 0.00"
                     val nonCashSales = shiftData["nonCashSales"] as? String ?: "LKR 0.00"
                     val nonCashBreakdown = (shiftData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-                        if (k != null && v != null) k.toString() to v.toString() else null
+                        if (k != null && v != null) k.toString().uppercase() to v.toString() else null
                     }?.toMap() ?: emptyMap()
                     val cardSales = shiftData["cardSales"] as? String ?: "LKR 0.00"
                     val otherSales = shiftData["otherSales"] as? String ?: "LKR 0.00"
@@ -543,34 +573,38 @@ class Z93PrinterManager(private val context: Context) {
                     val difference = (shiftData["cashDiff"] as? String)?.takeIf { it.isNotEmpty() }
                         ?: (shiftData["difference"] as? String) ?: "LKR 0.00"
 
-                    s.printTwoCols("Opening Float:", openingFloat, size = 22, bold = false)
-                    s.printTwoCols("Total Invoices:", totalInvoices, size = 22, bold = false)
-                    s.printTwoCols("Gross Sales:", grossSales, size = 22, bold = false)
-                    if (discount.isNotEmpty() && discount != "LKR 0.00") {
-                        s.printTwoCols("Discounts:", "-$discount", size = 22, bold = false)
+                    s.printTwoCols("OPENING FLOAT:", openingFloat, size = 22, bold = false)
+                    s.printTwoCols("TOTAL INVOICES:", totalInvoices, size = 22, bold = false)
+                    s.printTwoCols("GROSS SALES:", grossSales, size = 22, bold = false)
+                    if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
+                        s.printTwoCols("DISCOUNTS:", "-$discount", size = 22, bold = false)
                     }
-                    if (tax.isNotEmpty() && tax != "LKR 0.00") {
-                        s.printTwoCols("Tax:", tax, size = 22, bold = false)
+                    if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
+                        s.printTwoCols("TAX:", tax, size = 22, bold = false)
                     }
                     s.printTwoCols("NET SALES:", netSales, size = 24, bold = true)
                     s.printDivider("-", 48)
 
-                    s.printTwoCols("Cash Sales:", cashSales, size = 22, bold = true)
-                    s.printTwoCols("Non-Cash Sales:", nonCashSales, size = 22, bold = true)
+                    s.printTwoCols("CASH SALES:", cashSales, size = 22, bold = true)
+                    s.printTwoCols("NON-CASH SALES:", nonCashSales, size = 22, bold = true)
                     if (nonCashBreakdown.isNotEmpty()) {
                         for ((method, amount) in nonCashBreakdown) {
-                            s.printTwoCols("  • $method:", amount, size = 20, bold = false)
+                            s.printTwoCols("  • ${method.uppercase()}:", amount, size = 20, bold = false)
                         }
-                    } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
-                        s.printTwoCols("  • Card Sales:", cardSales, size = 20, bold = false)
+                    } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00" && cardSales != "0.00") {
+                        s.printTwoCols("  • CARD SALES:", cardSales, size = 20, bold = false)
                     }
-                    s.printTwoCols("Paid In (+):", paidIn, size = 22, bold = false)
-                    s.printTwoCols("Paid Out (-):", paidOut, size = 22, bold = false)
+                    if (paidIn.isNotEmpty() && paidIn != "LKR 0.00" && paidIn != "0.00") {
+                        s.printTwoCols("PAID IN (+):", paidIn, size = 22, bold = false)
+                    }
+                    if (paidOut.isNotEmpty() && paidOut != "LKR 0.00" && paidOut != "0.00") {
+                        s.printTwoCols("PAID OUT (-):", paidOut, size = 22, bold = false)
+                    }
                     s.printDivider("-", 48)
 
-                    s.printTwoCols("Expected Cash:", expectedCash, size = 24, bold = true)
-                    s.printTwoCols("Actual Cash Count:", actualCash, size = 24, bold = true)
-                    s.printTwoCols("Difference / Variance:", difference, size = 24, bold = true)
+                    s.printTwoCols("EXPECTED CASH:", expectedCash, size = 24, bold = true)
+                    s.printTwoCols("ACTUAL CASH COUNT:", actualCash, size = 24, bold = true)
+                    s.printTwoCols("DIFFERENCE / VARIANCE:", difference, size = 24, bold = true)
                     s.printDivider("-", 48)
                 }
 
@@ -599,11 +633,11 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = exchangeData["appName"] as? String ?: "ONIMTA POS"
-                val voucherCode = exchangeData["voucherCode"] as? String ?: ""
+                val appName = (exchangeData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val voucherCode = (exchangeData["voucherCode"] as? String ?: "").uppercase()
                 val totalAmount = exchangeData["totalAmount"] as? String ?: "LKR 0.00"
-                val customerName = exchangeData["customerName"] as? String ?: "Walk-in Customer"
-                val cashierName = exchangeData["cashierName"] as? String ?: "Admin"
+                val customerName = (exchangeData["customerName"] as? String ?: "WALK-IN CUSTOMER").uppercase()
+                val cashierName = (exchangeData["cashierName"] as? String ?: "ADMIN").uppercase()
                 val dateTime = exchangeData["dateTime"] as? String ?: ""
                 val items = exchangeData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
@@ -611,22 +645,27 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText("EXCHANGE VOUCHER / SLIP", size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Voucher #:", voucherCode, size = 24, bold = true)
-                s.printTwoCols("Date:", dateTime, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashierName, size = 22, bold = false)
-                if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-                    s.printTwoCols("Customer:", customerName, size = 22, bold = false)
+                s.printTwoCols("VOUCHER #:", voucherCode, size = 24, bold = true)
+                s.printTwoCols("DATE:", dateTime, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashierName, size = 22, bold = false)
+                if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+                    s.printTwoCols("CUSTOMER:", customerName, size = 22, bold = false)
                 }
                 s.printDivider("-", 48)
 
-                s.printText("EXCHANGED ITEMS RETURNED:", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printTwoCols("LN  PRODUCT", "PRICE  QTY   TOTAL", size = 22, bold = true)
+                s.printDivider("-", 48)
+
+                var ln = 1
                 for (item in items) {
-                    val desc = item["description"] as? String ?: ""
+                    val desc = (item["description"] as? String ?: "").uppercase()
                     val qty = item["qty"] as? String ?: "1"
                     val price = item["price"] as? String ?: ""
                     val total = item["total"] as? String ?: ""
-                    s.printText(desc, size = 24, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                    s.printTwoCols("  $qty x $price", total, size = 22, bold = false)
+                    s.printText(String.format("%2d. %s", ln, desc), size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                    val priceQtyTotal = String.format("%10s %5s %12s", price, qty, total)
+                    s.printText(priceQtyTotal, size = 22, bold = false, align = Layout.Alignment.ALIGN_OPPOSITE)
+                    ln++
                 }
                 s.printDivider("-", 48)
 
@@ -640,8 +679,8 @@ class Z93PrinterManager(private val context: Context) {
                 }
 
                 s.printDivider("-", 48)
-                s.printText("Scan barcode or QR code to redeem", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
-                s.printText("exchange credit on your next bill.", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
+                s.printText("SCAN BARCODE OR QR CODE TO REDEEM", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
+                s.printText("EXCHANGE CREDIT ON YOUR NEXT BILL.", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
                 s.feedAndCut(5)
@@ -669,37 +708,42 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = returnData["appName"] as? String ?: "ONIMTA POS"
-                val returnNo = returnData["returnNo"] as? String ?: ""
-                val originalInvoice = returnData["originalInvoiceNo"] as? String ?: ""
-                val customerName = returnData["customerName"] as? String ?: "Walk-in Customer"
-                val cashierName = returnData["cashierName"] as? String ?: "Admin"
+                val appName = (returnData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val returnNo = (returnData["returnNo"] as? String ?: "").uppercase()
+                val originalInvoice = (returnData["originalInvoiceNo"] as? String ?: "").uppercase()
+                val customerName = (returnData["customerName"] as? String ?: "WALK-IN CUSTOMER").uppercase()
+                val cashierName = (returnData["cashierName"] as? String ?: "ADMIN").uppercase()
                 val dateTime = returnData["dateTime"] as? String ?: ""
                 val refundAmount = returnData["refundAmount"] as? String ?: "LKR 0.00"
-                val paymentMethod = returnData["paymentMethod"] as? String ?: "Cash"
+                val paymentMethod = (returnData["paymentMethod"] as? String ?: "CASH").uppercase()
                 val items = returnData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
                 s.printText(appName, size = 30, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printText("RETURN NOTE / REFUND SLIP", size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Return #:", returnNo, size = 24, bold = true)
-                if (originalInvoice.isNotEmpty()) s.printTwoCols("Original Inv #:", originalInvoice, size = 22, bold = false)
-                s.printTwoCols("Date:", dateTime, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashierName, size = 22, bold = false)
-                if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-                    s.printTwoCols("Customer:", customerName, size = 22, bold = false)
+                s.printTwoCols("RETURN #:", returnNo, size = 24, bold = true)
+                if (originalInvoice.isNotEmpty()) s.printTwoCols("ORIGINAL INV #:", originalInvoice, size = 22, bold = false)
+                s.printTwoCols("DATE:", dateTime, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashierName, size = 22, bold = false)
+                if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+                    s.printTwoCols("CUSTOMER:", customerName, size = 22, bold = false)
                 }
                 s.printDivider("-", 48)
 
-                s.printText("RETURNED ITEMS:", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printTwoCols("LN  PRODUCT", "PRICE  QTY   TOTAL", size = 22, bold = true)
+                s.printDivider("-", 48)
+
+                var ln = 1
                 for (item in items) {
-                    val desc = item["description"] as? String ?: ""
+                    val desc = (item["description"] as? String ?: "").uppercase()
                     val qty = item["qty"] as? String ?: "1"
                     val price = item["price"] as? String ?: ""
                     val total = item["total"] as? String ?: ""
-                    s.printText(desc, size = 24, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                    s.printTwoCols("  $qty x $price", total, size = 22, bold = false)
+                    s.printText(String.format("%2d. %s", ln, desc), size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                    val priceQtyTotal = String.format("%10s %5s %12s", price, qty, total)
+                    s.printText(priceQtyTotal, size = 22, bold = false, align = Layout.Alignment.ALIGN_OPPOSITE)
+                    ln++
                 }
                 s.printDivider("-", 48)
 
@@ -708,9 +752,9 @@ class Z93PrinterManager(private val context: Context) {
                 s.printDivider("-", 48)
 
                 s.printSpace(1)
-                s.printText("Cashier Sign: ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printText("CASHIER SIGN: ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
                 s.printSpace(1)
-                s.printText("Customer Sign: ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printText("CUSTOMER SIGN: ....................", size = 20, bold = false, align = Layout.Alignment.ALIGN_NORMAL)
                 s.printDivider("-", 48)
 
                 s.feedAndCut(5)
@@ -738,12 +782,12 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = holdData["appName"] as? String ?: "ONIMTA POS"
-                val holdNo = holdData["holdNo"] as? String ?: ""
+                val appName = (holdData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val holdNo = (holdData["holdNo"] as? String ?: "").uppercase()
                 val totalAmount = holdData["totalAmount"] as? String ?: "LKR 0.00"
-                val totalItems = (holdData["totalItems"] as? String) ?: ""
-                val customerName = (holdData["customerName"] as? String) ?: (holdData["customer"] as? String) ?: "Walk-in Customer"
-                val cashierName = (holdData["cashierName"] as? String) ?: (holdData["cashier"] as? String) ?: "Admin"
+                val totalItems = ((holdData["totalItems"] as? String) ?: "").uppercase()
+                val customerName = ((holdData["customerName"] as? String) ?: (holdData["customer"] as? String) ?: "WALK-IN CUSTOMER").uppercase()
+                val cashierName = ((holdData["cashierName"] as? String) ?: (holdData["cashier"] as? String) ?: "ADMIN").uppercase()
                 val dateTime = holdData["dateTime"] as? String ?: ""
                 val items = holdData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
@@ -751,18 +795,18 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText("*** HELD BILL RECEIPT ***", size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Hold Bill #:", holdNo, size = 24, bold = true)
-                if (dateTime.isNotEmpty()) s.printTwoCols("Date:", dateTime, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashierName, size = 22, bold = false)
-                if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-                    s.printTwoCols("Customer:", customerName, size = 22, bold = false)
+                s.printTwoCols("HOLD BILL #:", holdNo, size = 24, bold = true)
+                if (dateTime.isNotEmpty()) s.printTwoCols("DATE:", dateTime, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashierName, size = 22, bold = false)
+                if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+                    s.printTwoCols("CUSTOMER:", customerName, size = 22, bold = false)
                 }
                 s.printDivider("-", 48)
 
                 if (items.isNotEmpty()) {
                     s.printText("HELD ITEMS", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
                     for (item in items) {
-                        val desc = item["description"] as? String ?: ""
+                        val desc = (item["description"] as? String ?: "").uppercase()
                         val qty = item["qty"] as? String ?: "1"
                         val price = item["price"] as? String ?: ""
                         val total = item["total"] as? String ?: ""
@@ -773,7 +817,7 @@ class Z93PrinterManager(private val context: Context) {
                 }
 
                 if (totalItems.isNotEmpty()) {
-                    s.printTwoCols("Total Items:", totalItems, size = 24, bold = true)
+                    s.printTwoCols("TOTAL ITEMS:", totalItems, size = 24, bold = true)
                 }
                 s.printTwoCols("HELD AMOUNT:", totalAmount, size = 28, bold = true)
                 s.printDivider("-", 48)
@@ -783,8 +827,8 @@ class Z93PrinterManager(private val context: Context) {
                     s.printText("* $holdNo *", size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                     s.printQrCode(holdNo, size = 200)
                     s.printDivider("-", 48)
-                    s.printText("Scan barcode or QR code to recall", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
-                    s.printText("held bill to current cart.", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
+                    s.printText("SCAN BARCODE OR QR CODE TO RECALL", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
+                    s.printText("HELD BILL TO CURRENT CART.", size = 20, bold = false, align = Layout.Alignment.ALIGN_CENTER)
                     s.printDivider("-", 48)
                 }
 
@@ -813,10 +857,10 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-                val title = reportData["title"] as? String ?: "ITEM WISE SALES"
-                val period = reportData["period"] as? String ?: "Today"
-                val cashier = (reportData["cashierName"] as? String) ?: (reportData["cashier"] as? String) ?: "Admin"
+                val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val title = ((reportData["title"] as? String) ?: "ITEM WISE SALES").uppercase()
+                val period = ((reportData["period"] as? String) ?: "Today").uppercase()
+                val cashier = (((reportData["cashierName"] as? String) ?: (reportData["cashier"] as? String) ?: "Admin")).uppercase()
                 val dateTime = reportData["dateTime"] as? String ?: ""
                 val totalQty = (reportData["totalQuantity"] as? String) ?: (reportData["totalQty"] as? String) ?: "0"
                 val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
@@ -826,10 +870,10 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText(title, size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Period:", period, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashier, size = 22, bold = false)
+                s.printTwoCols("PERIOD:", period, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashier, size = 22, bold = false)
                 if (dateTime.isNotEmpty()) {
-                    s.printTwoCols("Date:", dateTime, size = 22, bold = false)
+                    s.printTwoCols("DATE:", dateTime, size = 22, bold = false)
                 }
                 s.printDivider("-", 48)
 
@@ -839,7 +883,7 @@ class Z93PrinterManager(private val context: Context) {
 
                 var rank = 1
                 for (item in items) {
-                    val desc = item["description"] as? String ?: ""
+                    val desc = (item["description"] as? String ?: "").uppercase()
                     val qty = (item["qty"] as? String) ?: (item["quantity"] as? String) ?: "0"
                     val total = (item["total"] as? String) ?: (item["amount"] as? String) ?: "LKR 0.00"
                     s.printText("$rank. $desc", size = 24, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
@@ -877,10 +921,10 @@ class Z93PrinterManager(private val context: Context) {
                 val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
                 val s = NativePrinterSession(p, context)
 
-                val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-                val title = reportData["title"] as? String ?: "TOTAL SALES REPORT"
-                val period = reportData["period"] as? String ?: "Today"
-                val cashier = (reportData["cashierName"] as? String) ?: (reportData["cashier"] as? String) ?: "Admin"
+                val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val title = ((reportData["title"] as? String) ?: "TOTAL SALES REPORT").uppercase()
+                val period = ((reportData["period"] as? String) ?: "Today").uppercase()
+                val cashier = (((reportData["cashierName"] as? String) ?: (reportData["cashier"] as? String) ?: "Admin")).uppercase()
                 val dateTime = reportData["dateTime"] as? String ?: ""
 
                 val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
@@ -896,7 +940,7 @@ class Z93PrinterManager(private val context: Context) {
                 val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
                 val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
                 val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-                    if (k != null && v != null) k.toString() to v.toString() else null
+                    if (k != null && v != null) k.toString().uppercase() to v.toString() else null
                 }?.toMap() ?: emptyMap()
                 val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
                 val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
@@ -906,46 +950,46 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText(title, size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("Period:", period, size = 22, bold = false)
-                s.printTwoCols("Cashier:", cashier, size = 22, bold = false)
+                s.printTwoCols("PERIOD:", period, size = 22, bold = false)
+                s.printTwoCols("CASHIER:", cashier, size = 22, bold = false)
                 if (dateTime.isNotEmpty()) {
-                    s.printTwoCols("Date:", dateTime, size = 22, bold = false)
+                    s.printTwoCols("DATE:", dateTime, size = 22, bold = false)
                 }
                 s.printDivider("-", 48)
 
                 s.printText("SALES SUMMARY", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                s.printTwoCols("Total Invoices:", totalInvoices, size = 22, bold = false)
-                s.printTwoCols("Gross Sales:", grossSales, size = 22, bold = false)
+                s.printTwoCols("TOTAL INVOICES:", totalInvoices, size = 22, bold = false)
+                s.printTwoCols("GROSS SALES:", grossSales, size = 22, bold = false)
                 if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-                    s.printTwoCols("Discounts:", "-$discount", size = 22, bold = false)
+                    s.printTwoCols("DISCOUNTS:", "-$discount", size = 22, bold = false)
                 }
                 if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-                    s.printTwoCols("Tax:", tax, size = 22, bold = false)
+                    s.printTwoCols("TAX:", tax, size = 22, bold = false)
                 }
-                s.printTwoCols("Net Sales:", netSales, size = 24, bold = true)
+                s.printTwoCols("NET SALES:", netSales, size = 24, bold = true)
                 if (returnsCount != "0" && returnsCount.isNotEmpty()) {
-                    s.printTwoCols("Returns ($returnsCount bills):", "-$returnsAmount", size = 22, bold = false)
+                    s.printTwoCols("RETURNS ($returnsCount bills):", "-$returnsAmount", size = 22, bold = false)
                 }
                 s.printDivider("-", 48)
                 s.printTwoCols("TOTAL NET REVENUE:", totalNetRevenue, size = 28, bold = true)
                 s.printDivider("-", 48)
 
                 s.printText("PAYMENTS / TENDER BREAKDOWN", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                s.printTwoCols("Cash Sales:", cashSales, size = 22, bold = true)
-                s.printTwoCols("Non-Cash Sales:", nonCashSales, size = 22, bold = true)
+                s.printTwoCols("CASH SALES:", cashSales, size = 22, bold = true)
+                s.printTwoCols("NON-CASH SALES:", nonCashSales, size = 22, bold = true)
                 if (nonCashBreakdown.isNotEmpty()) {
                     for ((method, amount) in nonCashBreakdown) {
-                        s.printTwoCols("  • $method:", amount, size = 20, bold = false)
+                        s.printTwoCols("  • ${method.uppercase()}:", amount, size = 20, bold = false)
                     }
                 } else {
                     if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) {
-                        s.printTwoCols("  • Card Sales:", cardSales, size = 20, bold = false)
+                        s.printTwoCols("  • CARD SALES:", cardSales, size = 20, bold = false)
                     }
                     if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
-                        s.printTwoCols("  • QR / Online:", qrSales, size = 20, bold = false)
+                        s.printTwoCols("  • QR / ONLINE:", qrSales, size = 20, bold = false)
                     }
                     if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                        s.printTwoCols("  • Credit Sales:", creditSales, size = 20, bold = false)
+                        s.printTwoCols("  • CREDIT SALES:", creditSales, size = 20, bold = false)
                     }
                 }
                 s.printDivider("-", 48)
@@ -954,6 +998,44 @@ class Z93PrinterManager(private val context: Context) {
                 onComplete(true, null)
             } catch (e: Throwable) {
                 Log.e(TAG, "Error printing total sales report on DBL Z93: ${e.message}", e)
+                onComplete(false, "DBL Z93 print error: ${e.message}")
+            }
+        }.start()
+    }
+
+    // ==========================================
+    // 9. FONT TEST PRINT (80mm)
+    // ==========================================
+    fun printFontTest(
+        fontName: String,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        Thread {
+            try {
+                if (!isPrinterReady()) {
+                    onComplete(false, "DBL Z93 printer is not ready or out of paper")
+                    return@Thread
+                }
+                val p = printer ?: return@Thread onComplete(false, "DBL Z93 printer instance is null")
+                activeFont = fontName
+                val s = NativePrinterSession(p, context, fontName)
+
+                s.printText("ONIMTA POS - FONT TEST (80MM)", size = 28, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+                s.printText("STYLE: ${fontName.uppercase()}", size = 22, bold = false, align = Layout.Alignment.ALIGN_CENTER)
+                s.printDivider("-", 48)
+                s.printText("The quick brown fox jumps over the lazy dog.", size = 22, bold = false)
+                s.printText("0123456789 - LKR 1,250.00", size = 24, bold = true)
+                s.printDivider("-", 48)
+                s.printTwoCols("1. SAMPLE PRODUCT ITEM", "LKR 450.00", size = 22, bold = false)
+                s.printTwoCols("2. ANOTHER RETAIL ITEM", "LKR 800.00", size = 22, bold = false)
+                s.printDivider("=", 48)
+                s.printTwoCols("TOTAL TEST AMOUNT:", "LKR 1,250.00", size = 24, bold = true)
+                s.printDivider("=", 48)
+                s.printText("80MM FONT APPLIED SUCCESSFULLY!", size = 22, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+                s.feedAndCut(5)
+                onComplete(true, null)
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error printing font test on DBL Z93: ${e.message}", e)
                 onComplete(false, "DBL Z93 print error: ${e.message}")
             }
         }.start()

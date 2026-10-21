@@ -189,7 +189,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              'Inv: ${widget.sale.invoiceNo}',
+                              'INV: ${widget.sale.invoiceNo.toUpperCase()}',
                               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.primary),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -198,7 +198,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             color: AppColors.success.withOpacity(0.15),
                             child: Text(
-                              widget.sale.status,
+                              widget.sale.status.toUpperCase(),
                               style: const TextStyle(
                                 color: AppColors.success,
                                 fontWeight: FontWeight.w900,
@@ -214,14 +214,14 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              'Cust: ${widget.sale.customerName}',
+                              'CUST: ${widget.sale.customerName.toUpperCase()}',
                               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Text(
-                            'Cashier: ${widget.sale.cashierName}',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            'CASHIER: ${widget.sale.cashierName.toUpperCase()}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -234,8 +234,16 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                         child: Row(
                           children: [
                             Expanded(
+                              flex: 1,
+                              child: Text('LN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.textSecondary)),
+                            ),
+                            Expanded(
                               flex: 5,
-                              child: Text('ITEM DESCRIPTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.textSecondary)),
+                              child: Text('PRODUCT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.textSecondary)),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text('PRICE', textAlign: TextAlign.right, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.textSecondary)),
                             ),
                             Expanded(
                               flex: 2,
@@ -251,17 +259,34 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                       const Divider(height: 10, thickness: 0.5, color: AppColors.border),
 
                       // Item Lines List
-                      ...widget.sale.items.map((item) {
+                      ...widget.sale.items.asMap().entries.map((entry) {
+                        final ln = entry.key + 1;
+                        final item = entry.value;
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 3),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
+                                flex: 1,
+                                child: Text(
+                                  '$ln.',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              Expanded(
                                 flex: 5,
                                 child: Text(
-                                  item.productDescription,
-                                  style: const TextStyle(fontSize: 12.5, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                                  item.productDescription.toUpperCase(),
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  CurrencyFormatter.formatAmount(item.unitPrice),
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                                 ),
                               ),
                               Expanded(
@@ -269,7 +294,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                                 child: Text(
                                   CurrencyFormatter.formatQuantity(item.quantity),
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                                 ),
                               ),
                               Expanded(
@@ -277,7 +302,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                                 child: Text(
                                   CurrencyFormatter.formatAmount(item.lineTotal),
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                                 ),
                               ),
                             ],
@@ -288,32 +313,32 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                       const Divider(height: 18, thickness: 1, color: AppColors.border),
 
                       // Summary Section
-                      _buildSummaryRow('Subtotal', CurrencyFormatter.formatWithSymbol(widget.sale.subtotal)),
+                      _buildSummaryRow('SUBTOTAL', CurrencyFormatter.formatWithSymbol(widget.sale.subtotal)),
                       if (widget.sale.discount > 0)
-                        _buildSummaryRow('Discount', '-${CurrencyFormatter.formatWithSymbol(widget.sale.discount)}', valueColor: AppColors.warning),
+                        _buildSummaryRow('DISCOUNT', '-${CurrencyFormatter.formatWithSymbol(widget.sale.discount)}', valueColor: AppColors.warning),
                       if ((widget.sale.subtotal - widget.sale.discount + widget.sale.tax - widget.sale.grandTotal) > 0.01)
                         _buildSummaryRow(
-                          'Exchange Credit',
+                          'EXCHANGE CREDIT',
                           '-${CurrencyFormatter.formatWithSymbol((widget.sale.subtotal - widget.sale.discount + widget.sale.tax - widget.sale.grandTotal))}',
                           valueColor: const Color(0xFFEA580C),
                         ),
                       if (widget.sale.tax > 0)
-                        _buildSummaryRow('Tax', CurrencyFormatter.formatWithSymbol(widget.sale.tax)),
+                        _buildSummaryRow('TAX', CurrencyFormatter.formatWithSymbol(widget.sale.tax)),
                       const SizedBox(height: 4),
                       _buildSummaryRow('GRAND TOTAL', CurrencyFormatter.formatWithSymbol(widget.sale.grandTotal), isBold: true, isLarge: true),
                       const Divider(height: 16, color: AppColors.border),
                       
                       // Payment Breakdown Lines (Card 3000, Cash 3500, etc.)
                       ..._getPaymentBreakdown().map((p) {
-                        final method = p['method'] as String;
+                        final method = (p['method'] as String).toUpperCase();
                         final amt = p['amount'] as double;
                         return _buildSummaryRow(method, CurrencyFormatter.formatWithSymbol(amt), isBold: false);
                       }),
                       
                       const Divider(height: 12, thickness: 0.5, color: AppColors.border),
-                      _buildSummaryRow('Total Paid', CurrencyFormatter.formatWithSymbol(widget.sale.paidAmount), isBold: true),
+                      _buildSummaryRow('TOTAL PAID', CurrencyFormatter.formatWithSymbol(widget.sale.paidAmount), isBold: true),
                       _buildSummaryRow(
-                        'Change Returned',
+                        'CHANGE RETURNED',
                         CurrencyFormatter.formatWithSymbol(widget.sale.changeAmount),
                         isBold: true,
                         valueColor: widget.sale.changeAmount > 0 ? AppColors.warning : AppColors.textPrimary,

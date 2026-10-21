@@ -175,41 +175,45 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             // Header Info
-            val appName = receiptData["appName"] as? String ?: "ONIMTA POS"
-            val invoiceNo = receiptData["invoiceNo"] as? String ?: ""
-            val customerName = receiptData["customerName"] as? String ?: "Walk-in Customer"
-            val cashierName = receiptData["cashierName"] as? String ?: "Admin"
+            val appName = (receiptData["appName"] as? String ?: "ONIMTA POS").uppercase()
+            val invoiceNo = (receiptData["invoiceNo"] as? String ?: "").uppercase()
+            val customerName = (receiptData["customerName"] as? String ?: "WALK-IN CUSTOMER").uppercase()
+            val cashierName = (receiptData["cashierName"] as? String ?: "ADMIN").uppercase()
             val dateStr = receiptData["dateTime"] as? String ?: ""
 
             printLine(appName, 28, alignCenter, true)
             printLine("ORDER INVOICE", 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Invoice #:", invoiceNo, 22, true)
+            printTwoCols("INVOICE #:", invoiceNo, 22, true)
             if (dateStr.isNotEmpty()) {
-                printTwoCols("Date:", dateStr, 20, false)
+                printTwoCols("DATE:", dateStr, 20, false)
             }
-            printTwoCols("Cashier:", cashierName, 20, false)
-            printTwoCols("Customer:", customerName, 20, false)
+            printTwoCols("CASHIER:", cashierName, 20, false)
+            printTwoCols("CUSTOMER:", customerName, 20, false)
             printLine("--------------------------------", 20, alignCenter, false)
 
             // Items List
             val items = receiptData["items"] as? List<Map<String, Any?>> ?: emptyList()
-            printLine("ITEM DESCRIPTION", 20, alignLeft, true)
+            printTwoCols("LN  PRODUCT", "PRICE QTY TOTAL", 20, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
+            var ln = 1
             for (item in items) {
-                val desc = item["description"] as? String ?: ""
+                val desc = (item["description"] as? String ?: "").uppercase()
                 val qty = item["qty"] as? String ?: "1"
                 val price = item["price"] as? String ?: ""
                 val itemDisc = item["discount"] as? String ?: ""
                 val total = item["total"] as? String ?: ""
 
-                printLine(desc, 22, alignLeft, true)
-                printTwoCols("  $qty x $price", total, 20, false)
-                if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00") {
-                    printTwoCols("    Item Disc:", "-$itemDisc", 18, false)
+                printLine(String.format("%2d. %s", ln, desc), 21, alignLeft, true)
+                val priceQtyTotal = String.format("%9s %4s %9s", price, qty, total)
+                val pad = (32 - priceQtyTotal.length).coerceAtLeast(0)
+                printLine(" ".repeat(pad) + priceQtyTotal, 20, alignLeft, false)
+                if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00" && itemDisc != "0.00") {
+                    printTwoCols("    ITEM DISC:", "-$itemDisc", 18, false)
                 }
+                ln++
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
@@ -220,26 +224,26 @@ class NexgoPrinterManager(private val context: Context) {
             val tax = receiptData["tax"] as? String ?: ""
             val grandTotal = receiptData["grandTotal"] as? String ?: ""
 
-            printTwoCols("Subtotal:", subtotal, 22, false)
-            if (discount.isNotEmpty() && discount != "LKR 0.00") {
-                printTwoCols("Discount:", "-$discount", 22, false)
+            printTwoCols("SUBTOTAL:", subtotal, 22, false)
+            if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
+                printTwoCols("DISCOUNT:", "-$discount", 22, false)
             }
-            if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00") {
-                printTwoCols("Exchange Credit:", "-$exchangeCredit", 22, false)
+            if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00" && exchangeCredit != "0.00") {
+                printTwoCols("EXCHANGE CREDIT:", "-$exchangeCredit", 22, false)
             }
-            if (tax.isNotEmpty() && tax != "LKR 0.00") {
-                printTwoCols("Tax:", tax, 22, false)
+            if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
+                printTwoCols("TAX:", tax, 22, false)
             }
-            printLine("--------------------------------", 20, alignCenter, false)
+            printLine("================================", 20, alignCenter, false)
             printTwoCols("GRAND TOTAL:", grandTotal, 26, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printLine("================================", 20, alignCenter, false)
 
             // Payments Breakdown
             val payments = receiptData["payments"] as? List<Map<String, Any?>> ?: emptyList()
             if (payments.isNotEmpty()) {
                 printLine("PAYMENTS:", 20, alignLeft, true)
                 for (pay in payments) {
-                    val method = pay["method"] as? String ?: "Payment"
+                    val method = (pay["method"] as? String ?: "PAYMENT").uppercase()
                     val amt = pay["amount"] as? String ?: ""
                     printTwoCols(method, amt, 22, false)
                 }
@@ -249,15 +253,15 @@ class NexgoPrinterManager(private val context: Context) {
             val change = receiptData["changeAmount"] as? String ?: ""
 
             if (totalPaid.isNotEmpty()) {
-                printTwoCols("Total Paid:", totalPaid, 22, true)
+                printTwoCols("TOTAL PAID:", totalPaid, 22, true)
             }
-            if (change.isNotEmpty() && change != "LKR 0.00") {
-                printTwoCols("Change Returned:", change, 24, true)
+            if (change.isNotEmpty() && change != "LKR 0.00" && change != "0.00") {
+                printTwoCols("CHANGE RETURNED:", change, 24, true)
             }
 
             printLine("--------------------------------", 20, alignCenter, false)
             printLine("THANK YOU FOR SHOPPING WITH US!", 20, alignCenter, true)
-            printLine("Please come again", 18, alignCenter, false)
+            printLine("PLEASE COME AGAIN", 18, alignCenter, false)
 
             // Feed paper so paper clears the cutter
             try {
@@ -362,11 +366,11 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = movementData["appName"] as? String ?: "ONIMTA POS"
-            val type = movementData["type"] as? String ?: "PAID IN"
+            val appName = (movementData["appName"] as? String ?: "ONIMTA POS").uppercase()
+            val type = (movementData["type"] as? String ?: "PAID IN").uppercase()
             val amount = movementData["amount"] as? String ?: "LKR 0.00"
-            val reason = movementData["reason"] as? String ?: "Cash Movement"
-            val cashier = movementData["cashier"] as? String ?: "Admin"
+            val reason = (movementData["reason"] as? String ?: "Cash Movement").uppercase()
+            val cashier = (movementData["cashier"] as? String ?: "Admin").uppercase()
             val dateStr = movementData["dateTime"] as? String ?: ""
 
             printLine(appName, 28, alignCenter, true)
@@ -374,20 +378,20 @@ class NexgoPrinterManager(private val context: Context) {
             printLine("--------------------------------", 20, alignCenter, false)
 
             if (dateStr.isNotEmpty()) {
-                printTwoCols("Date:", dateStr, 20, false)
+                printTwoCols("DATE:", dateStr, 20, false)
             }
-            printTwoCols("Cashier:", cashier, 20, false)
-            printTwoCols("Type:", type, 22, true)
-            printLine("Reason / Remark:", 20, alignLeft, false)
+            printTwoCols("CASHIER:", cashier, 20, false)
+            printTwoCols("TYPE:", type, 22, true)
+            printLine("REASON / REMARK:", 20, alignLeft, false)
             printLine("  $reason", 22, alignLeft, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
             printTwoCols("TOTAL $type:", amount, 26, true)
             printLine("--------------------------------", 20, alignCenter, false)
             printLine("", 16, alignLeft, false)
-            printLine("Cashier Signature: _____________", 20, alignLeft, false)
+            printLine("CASHIER SIGNATURE: _____________", 20, alignLeft, false)
             printLine("", 16, alignLeft, false)
-            printLine("Approved By:       _____________", 20, alignLeft, false)
+            printLine("APPROVED BY:       _____________", 20, alignLeft, false)
             printLine("--------------------------------", 20, alignCenter, false)
 
             // Feed paper so paper clears the cutter
@@ -483,11 +487,11 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-            val title = reportData["title"] as? String ?: "SHIFT REPORT"
+            val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+            val title = (reportData["title"] as? String ?: "SHIFT REPORT").uppercase()
             val dayNumber = reportData["dayNumber"] as? String ?: "1"
             val shiftNumber = reportData["shiftNumber"] as? String ?: "1"
-            val cashier = reportData["cashier"] as? String ?: "Admin"
+            val cashier = (reportData["cashier"] as? String ?: "Admin").uppercase()
             val dateTime = reportData["dateTime"] as? String ?: ""
             val openedAt = reportData["openedAt"] as? String ?: ""
             val isEndReport = reportData["isEndReport"] as? Boolean ?: false
@@ -496,14 +500,14 @@ class NexgoPrinterManager(private val context: Context) {
             printLine(title, 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Day #:", dayNumber, 20, false)
-            printTwoCols("Shift #:", shiftNumber, 20, false)
-            printTwoCols("Cashier:", cashier, 20, false)
+            printTwoCols("DAY #:", dayNumber, 20, false)
+            printTwoCols("SHIFT #:", shiftNumber, 20, false)
+            printTwoCols("CASHIER:", cashier, 20, false)
             if (dateTime.isNotEmpty()) {
-                printTwoCols("Date / Time:", dateTime, 20, false)
+                printTwoCols("DATE / TIME:", dateTime, 20, false)
             }
             if (openedAt.isNotEmpty()) {
-                printTwoCols("Opened At:", openedAt, 20, false)
+                printTwoCols("OPENED AT:", openedAt, 20, false)
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
@@ -522,7 +526,7 @@ class NexgoPrinterManager(private val context: Context) {
                 val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
                 val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
                 val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-                    if (k != null && v != null) k.toString() to v.toString() else null
+                    if (k != null && v != null) k.toString().uppercase() to v.toString() else null
                 }?.toMap() ?: emptyMap()
                 val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
                 val otherSales = reportData["otherSales"] as? String ?: "LKR 0.00"
@@ -535,49 +539,49 @@ class NexgoPrinterManager(private val context: Context) {
                 val cashDiff = reportData["cashDiff"] as? String ?: "LKR 0.00"
 
                 printLine("SALES SUMMARY", 20, alignLeft, true)
-                printTwoCols("Total Invoices:", totalInvoices, 20, false)
-                printTwoCols("Gross Sales:", grossSales, 20, false)
+                printTwoCols("TOTAL INVOICES:", totalInvoices, 20, false)
+                printTwoCols("GROSS SALES:", grossSales, 20, false)
                 if (discount.isNotEmpty() && discount != "LKR 0.00") {
-                    printTwoCols("Discounts:", "-$discount", 20, false)
+                    printTwoCols("DISCOUNTS:", "-$discount", 20, false)
                 }
                 if (tax.isNotEmpty() && tax != "LKR 0.00") {
-                    printTwoCols("Tax:", tax, 20, false)
+                    printTwoCols("TAX:", tax, 20, false)
                 }
                 printTwoCols("NET SALES:", netSales, 22, true)
                 printLine("--------------------------------", 20, alignCenter, false)
 
                 printLine("PAYMENTS BREAKDOWN", 20, alignLeft, true)
-                printTwoCols("Cash Sales:", cashSales, 20, true)
-                printTwoCols("Non-Cash Sales:", nonCashSales, 20, true)
+                printTwoCols("CASH SALES:", cashSales, 20, true)
+                printTwoCols("NON-CASH SALES:", nonCashSales, 20, true)
                 if (nonCashBreakdown.isNotEmpty()) {
                     for ((method, amount) in nonCashBreakdown) {
-                        printTwoCols("  • $method:", amount, 18, false)
+                        printTwoCols("  • ${method.uppercase()}:", amount, 18, false)
                     }
                 } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
-                    printTwoCols("  • Card Sales:", cardSales, 18, false)
+                    printTwoCols("  • CARD SALES:", cardSales, 18, false)
                 }
                 printLine("--------------------------------", 20, alignCenter, false)
 
                 printLine("DRAWER RECONCILIATION", 20, alignLeft, true)
-                printTwoCols("Opening Balance:", openingBalance, 20, false)
-                printTwoCols("+ Cash Sales:", cashSales, 20, false)
+                printTwoCols("OPENING BALANCE:", openingBalance, 20, false)
+                printTwoCols("+ CASH SALES:", cashSales, 20, false)
                 if (paidIn != "LKR 0.00" && paidIn.isNotEmpty()) {
-                    printTwoCols("+ Paid In (Entry):", paidIn, 20, false)
+                    printTwoCols("+ PAID IN (ENTRY):", paidIn, 20, false)
                 }
                 if (paidOut != "LKR 0.00" && paidOut.isNotEmpty()) {
-                    printTwoCols("- Paid Out (Expense):", "-$paidOut", 20, false)
+                    printTwoCols("- PAID OUT (EXPENSE):", "-$paidOut", 20, false)
                 }
                 printLine("--------------------------------", 20, alignCenter, false)
-                printTwoCols("Expected Cash:", expectedCash, 22, true)
-                printTwoCols("Actual Cash in Hand:", actualCash, 22, true)
+                printTwoCols("EXPECTED CASH:", expectedCash, 22, true)
+                printTwoCols("ACTUAL CASH IN HAND:", actualCash, 22, true)
                 printTwoCols("OVER / SHORT:", cashDiff, 24, true)
             }
 
             printLine("--------------------------------", 20, alignCenter, false)
             printLine("", 16, alignLeft, false)
-            printLine("Cashier Signature: _____________", 20, alignLeft, false)
+            printLine("CASHIER SIGNATURE: _____________", 20, alignLeft, false)
             printLine("", 16, alignLeft, false)
-            printLine("Manager Signature: _____________", 20, alignLeft, false)
+            printLine("MANAGER SIGNATURE: _____________", 20, alignLeft, false)
             printLine("--------------------------------", 20, alignCenter, false)
 
             // Feed paper
@@ -681,11 +685,11 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = exchangeData["appName"] as? String ?: "ONIMTA POS"
+            val appName = (exchangeData["appName"] as? String ?: "ONIMTA POS").uppercase()
             val voucherCode = exchangeData["voucherCode"] as? String ?: ""
             val totalAmount = exchangeData["totalAmount"] as? String ?: "LKR 0.00"
-            val customerName = exchangeData["customerName"] as? String ?: "Walk-in Customer"
-            val cashierName = exchangeData["cashierName"] as? String ?: "Admin"
+            val customerName = (exchangeData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+            val cashierName = (exchangeData["cashierName"] as? String ?: "Admin").uppercase()
             val dateTime = exchangeData["dateTime"] as? String ?: ""
             val items = exchangeData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
@@ -693,22 +697,28 @@ class NexgoPrinterManager(private val context: Context) {
             printLine("EXCHANGE VOUCHER / SLIP", 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Voucher #:", voucherCode, 24, true)
-            printTwoCols("Date:", dateTime, 20, false)
-            printTwoCols("Cashier:", cashierName, 20, false)
-            if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-                printTwoCols("Customer:", customerName, 20, false)
+            printTwoCols("VOUCHER #:", voucherCode, 24, true)
+            printTwoCols("DATE:", dateTime, 20, false)
+            printTwoCols("CASHIER:", cashierName, 20, false)
+            if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+                printTwoCols("CUSTOMER:", customerName, 20, false)
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printLine("EXCHANGED ITEMS RETURNED:", 20, alignLeft, true)
+            printTwoCols("LN  PRODUCT", "PRICE QTY TOTAL", 20, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            var ln = 1
             for (item in items) {
-                val desc = item["description"] as? String ?: ""
+                val desc = (item["description"] as? String ?: "").uppercase()
                 val qty = item["qty"] as? String ?: "1"
                 val price = item["price"] as? String ?: ""
                 val total = item["total"] as? String ?: ""
-                printLine(desc, 22, alignLeft, true)
-                printTwoCols("  $qty x $price", total, 20, false)
+                printLine(String.format("%2d. %s", ln, desc), 21, alignLeft, true)
+                val priceQtyTotal = String.format("%9s %4s %9s", price, qty, total)
+                val pad = (32 - priceQtyTotal.length).coerceAtLeast(0)
+                printLine(" ".repeat(pad) + priceQtyTotal, 20, alignLeft, false)
+                ln++
             }
 
             printLine("--------------------------------", 20, alignCenter, false)
@@ -844,13 +854,13 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = returnData["appName"] as? String ?: "ONIMTA POS"
+            val appName = (returnData["appName"] as? String ?: "ONIMTA POS").uppercase()
             val returnNo = returnData["returnNo"] as? String ?: ""
             val refundAmount = returnData["refundAmount"] as? String ?: "LKR 0.00"
-            val paymentMethod = returnData["paymentMethod"] as? String ?: "Cash"
-            val reason = returnData["reason"] as? String ?: "Customer Return"
-            val customerName = returnData["customerName"] as? String ?: "Walk-in Customer"
-            val cashierName = returnData["cashierName"] as? String ?: "Admin"
+            val paymentMethod = (returnData["paymentMethod"] as? String ?: "CASH").uppercase()
+            val reason = (returnData["reason"] as? String ?: "CUSTOMER RETURN").uppercase()
+            val customerName = (returnData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+            val cashierName = (returnData["cashierName"] as? String ?: "Admin").uppercase()
             val dateTime = returnData["dateTime"] as? String ?: ""
             val items = returnData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
@@ -858,23 +868,29 @@ class NexgoPrinterManager(private val context: Context) {
             printLine("RETURN / REFUND RECEIPT", 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Return Ref #:", returnNo, 22, true)
-            printTwoCols("Date:", dateTime, 20, false)
-            printTwoCols("Cashier:", cashierName, 20, false)
-            if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-                printTwoCols("Customer:", customerName, 20, false)
+            printTwoCols("RETURN REF #:", returnNo, 22, true)
+            printTwoCols("DATE:", dateTime, 20, false)
+            printTwoCols("CASHIER:", cashierName, 20, false)
+            if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+                printTwoCols("CUSTOMER:", customerName, 20, false)
             }
-            printTwoCols("Reason:", reason, 20, false)
+            printTwoCols("REASON:", reason, 20, false)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printLine("RETURNED ITEMS:", 20, alignLeft, true)
+            printTwoCols("LN  PRODUCT", "PRICE QTY TOTAL", 20, true)
+            printLine("--------------------------------", 20, alignCenter, false)
+
+            var ln = 1
             for (item in items) {
-                val desc = item["description"] as? String ?: ""
+                val desc = (item["description"] as? String ?: "").uppercase()
                 val qty = item["qty"] as? String ?: "1"
                 val price = item["price"] as? String ?: ""
                 val total = item["total"] as? String ?: ""
-                printLine(desc, 22, alignLeft, true)
-                printTwoCols("  $qty x $price", total, 20, false)
+                printLine(String.format("%2d. %s", ln, desc), 21, alignLeft, true)
+                val priceQtyTotal = String.format("%9s %4s %9s", price, qty, total)
+                val pad = (32 - priceQtyTotal.length).coerceAtLeast(0)
+                printLine(" ".repeat(pad) + priceQtyTotal, 20, alignLeft, false)
+                ln++
             }
 
             printLine("--------------------------------", 20, alignCenter, false)
@@ -883,9 +899,9 @@ class NexgoPrinterManager(private val context: Context) {
             printLine("--------------------------------", 20, alignCenter, false)
 
             printLine("", 16, alignLeft, false)
-            printLine("Cashier Sign: _____________", 20, alignLeft, false)
+            printLine("CASHIER SIGN: _____________", 20, alignLeft, false)
             printLine("", 16, alignLeft, false)
-            printLine("Customer Sign: ____________", 20, alignLeft, false)
+            printLine("CUSTOMER SIGN: ____________", 20, alignLeft, false)
             printLine("--------------------------------", 20, alignCenter, false)
 
             try {
@@ -973,10 +989,10 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-            val title = reportData["title"] as? String ?: "ITEM WISE SALES"
-            val period = reportData["period"] as? String ?: "Today"
-            val cashier = reportData["cashierName"] as? String ?: "Admin"
+            val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+            val title = (reportData["title"] as? String ?: "ITEM WISE SALES").uppercase()
+            val period = (reportData["period"] as? String ?: "TODAY").uppercase()
+            val cashier = (reportData["cashierName"] as? String ?: "Admin").uppercase()
             val dateTime = reportData["dateTime"] as? String ?: ""
             val totalQty = reportData["totalQuantity"] as? String ?: "0"
             val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
@@ -986,10 +1002,10 @@ class NexgoPrinterManager(private val context: Context) {
             printLine(title, 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Period:", period, 20, false)
-            printTwoCols("Cashier:", cashier, 20, false)
+            printTwoCols("PERIOD:", period, 20, false)
+            printTwoCols("CASHIER:", cashier, 20, false)
             if (dateTime.isNotEmpty()) {
-                printTwoCols("Date:", dateTime, 20, false)
+                printTwoCols("DATE:", dateTime, 20, false)
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
@@ -999,11 +1015,11 @@ class NexgoPrinterManager(private val context: Context) {
 
             var rank = 1
             for (item in items) {
-                val desc = item["description"] as? String ?: ""
+                val desc = (item["description"] as? String ?: "").uppercase()
                 val qty = item["qty"] as? String ?: "0"
                 val total = item["total"] as? String ?: "LKR 0.00"
                 printLine("$rank. $desc", 22, alignLeft, true)
-                printTwoCols("   Qty: $qty", total, 20, false)
+                printTwoCols("   QTY: $qty", total, 20, false)
                 rank++
             }
 
@@ -1097,10 +1113,10 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-            val title = reportData["title"] as? String ?: "TOTAL SALES REPORT"
-            val period = reportData["period"] as? String ?: "Today"
-            val cashier = reportData["cashierName"] as? String ?: "Admin"
+            val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+            val title = (reportData["title"] as? String ?: "TOTAL SALES REPORT").uppercase()
+            val period = (reportData["period"] as? String ?: "TODAY").uppercase()
+            val cashier = (reportData["cashierName"] as? String ?: "Admin").uppercase()
             val dateTime = reportData["dateTime"] as? String ?: ""
 
             val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
@@ -1116,7 +1132,7 @@ class NexgoPrinterManager(private val context: Context) {
             val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
             val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
             val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-                if (k != null && v != null) k.toString() to v.toString() else null
+                if (k != null && v != null) k.toString().uppercase() to v.toString() else null
             }?.toMap() ?: emptyMap()
             val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
             val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
@@ -1126,46 +1142,46 @@ class NexgoPrinterManager(private val context: Context) {
             printLine(title, 22, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Period:", period, 20, false)
-            printTwoCols("Cashier:", cashier, 20, false)
+            printTwoCols("PERIOD:", period, 20, false)
+            printTwoCols("CASHIER:", cashier, 20, false)
             if (dateTime.isNotEmpty()) {
-                printTwoCols("Date:", dateTime, 20, false)
+                printTwoCols("DATE:", dateTime, 20, false)
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
             printLine("SALES SUMMARY", 20, alignLeft, true)
-            printTwoCols("Total Invoices:", totalInvoices, 20, false)
-            printTwoCols("Gross Sales:", grossSales, 20, false)
+            printTwoCols("TOTAL INVOICES:", totalInvoices, 20, false)
+            printTwoCols("GROSS SALES:", grossSales, 20, false)
             if (discount.isNotEmpty() && discount != "LKR 0.00") {
-                printTwoCols("Discounts:", "-$discount", 20, false)
+                printTwoCols("DISCOUNTS:", "-$discount", 20, false)
             }
             if (tax.isNotEmpty() && tax != "LKR 0.00") {
-                printTwoCols("Tax:", tax, 20, false)
+                printTwoCols("TAX:", tax, 20, false)
             }
-            printTwoCols("Net Sales:", netSales, 22, true)
+            printTwoCols("NET SALES:", netSales, 22, true)
             if (returnsCount != "0") {
-                printTwoCols("Returns ($returnsCount bills):", "-$returnsAmount", 20, false)
+                printTwoCols("RETURNS ($returnsCount BILLS):", "-$returnsAmount", 20, false)
             }
             printLine("--------------------------------", 20, alignCenter, false)
             printTwoCols("TOTAL NET REVENUE:", totalNetRevenue, 26, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
             printLine("PAYMENTS / TENDER BREAKDOWN", 20, alignLeft, true)
-            printTwoCols("Cash Sales:", cashSales, 20, true)
-            printTwoCols("Non-Cash Sales:", nonCashSales, 20, true)
+            printTwoCols("CASH SALES:", cashSales, 20, true)
+            printTwoCols("NON-CASH SALES:", nonCashSales, 20, true)
             if (nonCashBreakdown.isNotEmpty()) {
                 for ((method, amount) in nonCashBreakdown) {
-                    printTwoCols("  • $method:", amount, 18, false)
+                    printTwoCols("  • ${method.uppercase()}:", amount, 18, false)
                 }
             } else {
                 if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) {
-                    printTwoCols("  • Card Sales:", cardSales, 20, false)
+                    printTwoCols("  • CARD SALES:", cardSales, 20, false)
                 }
                 if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
-                    printTwoCols("  • QR / Online:", qrSales, 20, false)
+                    printTwoCols("  • QR / ONLINE:", qrSales, 20, false)
                 }
                 if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                    printTwoCols("  • Credit Sales:", creditSales, 20, false)
+                    printTwoCols("  • CREDIT SALES:", creditSales, 20, false)
                 }
             }
             printLine("--------------------------------", 20, alignCenter, false)
@@ -1256,27 +1272,27 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = holdData["appName"] as? String ?: "ONIMTA POS"
+            val appName = (holdData["appName"] as? String ?: "ONIMTA POS").uppercase()
             val holdNo = holdData["holdNo"] as? String ?: ""
             val totalAmount = holdData["totalAmount"] as? String ?: "LKR 0.00"
-            val totalItems = holdData["totalItems"] as? String ?: "0 items"
-            val customerName = holdData["customerName"] as? String ?: "Walk-in Customer"
-            val cashierName = holdData["cashierName"] as? String ?: "Admin"
+            val totalItems = (holdData["totalItems"] as? String ?: "0 items").uppercase()
+            val customerName = (holdData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+            val cashierName = (holdData["cashierName"] as? String ?: "Admin").uppercase()
             val dateTime = holdData["dateTime"] as? String ?: ""
 
             printLine(appName, 28, alignCenter, true)
             printLine("*** HELD BILL RECEIPT ***", 24, alignCenter, true)
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Hold Bill #:", holdNo, 24, true)
-            printTwoCols("Date:", dateTime, 20, false)
-            printTwoCols("Cashier:", cashierName, 20, false)
-            if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-                printTwoCols("Customer:", customerName, 20, false)
+            printTwoCols("HOLD BILL #:", holdNo, 24, true)
+            printTwoCols("DATE:", dateTime, 20, false)
+            printTwoCols("CASHIER:", cashierName, 20, false)
+            if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+                printTwoCols("CUSTOMER:", customerName, 20, false)
             }
             printLine("--------------------------------", 20, alignCenter, false)
 
-            printTwoCols("Total Items:", totalItems, 22, true)
+            printTwoCols("TOTAL ITEMS:", totalItems, 22, true)
             printTwoCols("HELD AMOUNT:", totalAmount, 26, true)
             printLine("--------------------------------", 20, alignCenter, false)
 

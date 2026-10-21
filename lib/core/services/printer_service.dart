@@ -35,6 +35,26 @@ class PrinterService {
     }
   }
 
+  static Future<bool> setPrinterFont(String font) async {
+    try {
+      final bool success = await _channel.invokeMethod('setPrinterFont', {'font': font});
+      return success;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<PrinterResult> printFontTest(String font) async {
+    try {
+      final bool result = await _channel.invokeMethod('printFontTest', {'font': font});
+      return PrinterResult(result);
+    } on PlatformException catch (e) {
+      return PrinterResult(false, e.message ?? e.details?.toString() ?? 'Printer error');
+    } catch (e) {
+      return PrinterResult(false, e.toString());
+    }
+  }
+
   static Future<PrinterResult> printReceipt(Sale sale) async {
     try {
       // Decode payments
@@ -43,7 +63,7 @@ class PrinterService {
         try {
           final List decoded = jsonDecode(sale.paymentMethod);
           for (final m in decoded) {
-            final name = (m['method'] ?? 'Payment').toString();
+            final name = (m['method'] ?? 'PAYMENT').toString().toUpperCase();
             final amt = (m['amount'] as num?)?.toDouble() ?? 0.0;
             paymentsList.add({
               'method': name,
@@ -55,15 +75,15 @@ class PrinterService {
 
       if (paymentsList.isEmpty) {
         paymentsList.add({
-          'method': sale.paymentMethod,
+          'method': sale.paymentMethod.toUpperCase(),
           'amount': CurrencyFormatter.formatWithSymbol(sale.paidAmount),
         });
       }
 
-      // Build Items payload
+      // Build Items payload (item names capitalized)
       final itemsPayload = sale.items.map((item) {
         return {
-          'description': item.productDescription,
+          'description': item.productDescription.toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(item.quantity),
           'price': CurrencyFormatter.formatWithSymbol(item.unitPrice),
           'discount': item.discount > 0 ? CurrencyFormatter.formatWithSymbol(item.discount) : '',
@@ -73,10 +93,10 @@ class PrinterService {
 
       final exchangeCredit = (sale.subtotal - sale.discount + sale.tax - sale.grandTotal).clamp(0.0, double.infinity);
       final receiptData = {
-        'appName': AppConstants.appName,
-        'invoiceNo': sale.invoiceNo,
-        'customerName': sale.customerName,
-        'cashierName': sale.cashierName,
+        'appName': AppConstants.appName.toUpperCase(),
+        'invoiceNo': sale.invoiceNo.toUpperCase(),
+        'customerName': sale.customerName.toUpperCase(),
+        'cashierName': sale.cashierName.toUpperCase(),
         'dateTime': sale.createdAt ?? DateTime.now().toLocal().toString().substring(0, 19),
         'items': itemsPayload,
         'subtotal': CurrencyFormatter.formatWithSymbol(sale.subtotal),
@@ -107,11 +127,11 @@ class PrinterService {
   }) async {
     try {
       final payload = {
-        'appName': AppConstants.appName,
+        'appName': AppConstants.appName.toUpperCase(),
         'type': isPaidIn ? 'PAID IN (CASH ENTRY)' : 'PAID OUT (CASH EXPENSE)',
         'amount': CurrencyFormatter.formatWithSymbol(amount),
-        'reason': reason,
-        'cashier': cashierName ?? 'Admin',
+        'reason': reason.toUpperCase(),
+        'cashier': (cashierName ?? 'Admin').toUpperCase(),
         'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
       };
 
@@ -152,12 +172,12 @@ class PrinterService {
   }) async {
     try {
       final payload = {
-        'appName': AppConstants.appName,
-        'title': title,
+        'appName': AppConstants.appName.toUpperCase(),
+        'title': title.toUpperCase(),
         'dayNumber': '#$dayNumber',
         'shiftNumber': '#$shiftNumber',
         'shiftNo': '#$shiftNumber',
-        'cashier': cashierName,
+        'cashier': cashierName.toUpperCase(),
         'isEndReport': isEndReport,
         'openingBalance': CurrencyFormatter.formatWithSymbol(openingBalance),
         'openingCash': CurrencyFormatter.formatWithSymbol(openingBalance),
@@ -171,7 +191,7 @@ class PrinterService {
         'netSales': CurrencyFormatter.formatWithSymbol(netSales),
         'cashSales': CurrencyFormatter.formatWithSymbol(cashSales),
         'nonCashSales': CurrencyFormatter.formatWithSymbol(nonCashSales),
-        'nonCashBreakdown': nonCashBreakdown?.map((key, val) => MapEntry(key, CurrencyFormatter.formatWithSymbol(val))) ?? {},
+        'nonCashBreakdown': nonCashBreakdown?.map((key, val) => MapEntry(key.toUpperCase(), CurrencyFormatter.formatWithSymbol(val))) ?? {},
         'cardSales': CurrencyFormatter.formatWithSymbol(cardSales),
         'otherSales': CurrencyFormatter.formatWithSymbol(otherSales),
         'paidIn': CurrencyFormatter.formatWithSymbol(paidIn),
@@ -206,7 +226,7 @@ class PrinterService {
         final price = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
         final total = (item['lineTotal'] as num?)?.toDouble() ?? (qty * price);
         return {
-          'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString(),
+          'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString().toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(qty),
           'price': CurrencyFormatter.formatWithSymbol(price),
           'total': CurrencyFormatter.formatWithSymbol(total),
@@ -214,11 +234,11 @@ class PrinterService {
       }).toList();
 
       final payload = {
-        'appName': AppConstants.appName,
-        'voucherCode': voucherCode,
+        'appName': AppConstants.appName.toUpperCase(),
+        'voucherCode': voucherCode.toUpperCase(),
         'totalAmount': CurrencyFormatter.formatWithSymbol(totalAmount),
-        'customerName': customerName ?? 'Walk-in Customer',
-        'cashierName': cashierName ?? 'Admin',
+        'customerName': (customerName ?? 'Walk-in Customer').toUpperCase(),
+        'cashierName': (cashierName ?? 'Admin').toUpperCase(),
         'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
         'items': itemsPayload,
       };
@@ -249,7 +269,7 @@ class PrinterService {
         final price = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
         final total = (item['lineTotal'] as num?)?.toDouble() ?? (qty * price);
         return {
-          'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString(),
+          'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString().toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(qty),
           'price': CurrencyFormatter.formatWithSymbol(price),
           'total': CurrencyFormatter.formatWithSymbol(total),
@@ -257,13 +277,13 @@ class PrinterService {
       }).toList();
 
       final payload = {
-        'appName': AppConstants.appName,
-        'returnNo': returnNo,
+        'appName': AppConstants.appName.toUpperCase(),
+        'returnNo': returnNo.toUpperCase(),
         'refundAmount': CurrencyFormatter.formatWithSymbol(refundAmount),
-        'paymentMethod': paymentMethod,
-        'reason': reason ?? 'Customer Return',
-        'customerName': customerName ?? 'Walk-in Customer',
-        'cashierName': cashierName ?? 'Admin',
+        'paymentMethod': paymentMethod.toUpperCase(),
+        'reason': (reason ?? 'Customer Return').toUpperCase(),
+        'customerName': (customerName ?? 'Walk-in Customer').toUpperCase(),
+        'cashierName': (cashierName ?? 'Admin').toUpperCase(),
         'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
         'items': itemsPayload,
       };
@@ -292,17 +312,17 @@ class PrinterService {
         final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
         final total = (item['totalAmount'] as num?)?.toDouble() ?? 0.0;
         return {
-          'description': (item['description'] ?? 'Item').toString(),
+          'description': (item['description'] ?? 'Item').toString().toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(qty),
           'total': CurrencyFormatter.formatWithSymbol(total),
         };
       }).toList();
 
       final payload = {
-        'appName': AppConstants.appName,
-        'title': title,
-        'period': period,
-        'cashierName': cashierName,
+        'appName': AppConstants.appName.toUpperCase(),
+        'title': title.toUpperCase(),
+        'period': period.toUpperCase(),
+        'cashierName': cashierName.toUpperCase(),
         'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
         'totalQuantity': CurrencyFormatter.formatQuantity(totalQuantity),
         'totalRevenue': CurrencyFormatter.formatWithSymbol(totalRevenue),
@@ -341,10 +361,10 @@ class PrinterService {
   }) async {
     try {
       final payload = {
-        'appName': AppConstants.appName,
-        'title': title,
-        'period': period,
-        'cashierName': cashierName,
+        'appName': AppConstants.appName.toUpperCase(),
+        'title': title.toUpperCase(),
+        'period': period.toUpperCase(),
+        'cashierName': cashierName.toUpperCase(),
         'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
         'totalInvoices': '$totalInvoices',
         'grossSales': CurrencyFormatter.formatWithSymbol(grossSales),
@@ -356,7 +376,7 @@ class PrinterService {
         'totalNetRevenue': CurrencyFormatter.formatWithSymbol(totalNetRevenue),
         'cashSales': CurrencyFormatter.formatWithSymbol(cashSales),
         'nonCashSales': CurrencyFormatter.formatWithSymbol(nonCashSales),
-        'nonCashBreakdown': nonCashBreakdown?.map((key, val) => MapEntry(key, CurrencyFormatter.formatWithSymbol(val))) ?? {},
+        'nonCashBreakdown': nonCashBreakdown?.map((key, val) => MapEntry(key.toUpperCase(), CurrencyFormatter.formatWithSymbol(val))) ?? {},
         'cardSales': CurrencyFormatter.formatWithSymbol(cardSales),
         'qrSales': CurrencyFormatter.formatWithSymbol(qrSales),
         'creditSales': CurrencyFormatter.formatWithSymbol(creditSales),
@@ -383,12 +403,12 @@ class PrinterService {
   }) async {
     try {
       final payload = {
-        'appName': AppConstants.appName,
-        'holdNo': holdNo,
+        'appName': AppConstants.appName.toUpperCase(),
+        'holdNo': holdNo.toUpperCase(),
         'totalAmount': CurrencyFormatter.formatWithSymbol(totalAmount),
-        'totalItems': '$totalItemsCount lines (${CurrencyFormatter.formatQuantity(totalQuantity)} items)',
-        'customerName': customerName ?? 'Walk-in Customer',
-        'cashierName': cashierName ?? 'Admin',
+        'totalItems': '$totalItemsCount LINES (${CurrencyFormatter.formatQuantity(totalQuantity)} ITEMS)',
+        'customerName': (customerName ?? 'Walk-in Customer').toUpperCase(),
+        'cashierName': (cashierName ?? 'Admin').toUpperCase(),
         'dateTime': dateTime ?? DateTime.now().toLocal().toString().substring(0, 19),
       };
 

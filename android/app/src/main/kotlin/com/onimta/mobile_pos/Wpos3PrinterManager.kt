@@ -265,10 +265,10 @@ class Wpos3PrinterManager(private val context: Context) {
                     return@Thread
                 }
 
-                val appName = receiptData["appName"] as? String ?: "ONIMTA POS"
+                val appName = (receiptData["appName"] as? String ?: "ONIMTA POS").uppercase()
                 val invoiceNo = receiptData["invoiceNo"] as? String ?: ""
-                val customerName = receiptData["customerName"] as? String ?: "Walk-in Customer"
-                val cashierName = receiptData["cashierName"] as? String ?: "Admin"
+                val customerName = (receiptData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+                val cashierName = (receiptData["cashierName"] as? String ?: "Admin").uppercase()
                 val dateStr = receiptData["dateTime"] as? String ?: ""
                 val items = receiptData["items"] as? List<Map<String, Any?>> ?: emptyList()
                 val subtotal = receiptData["subtotal"] as? String ?: ""
@@ -354,36 +354,41 @@ class Wpos3PrinterManager(private val context: Context) {
                         pLine("TAX INVOICE RECEIPT", 20, 1, false)
                         pLine("--------------------------------", 18, 1, false)
 
-                        pTwoCols("Invoice #:", invoiceNo, 20, true)
-                        if (dateStr.isNotEmpty()) pTwoCols("Date:", dateStr, 18, false)
-                        pTwoCols("Cashier:", cashierName, 18, false)
-                        pTwoCols("Customer:", customerName, 18, false)
+                        pTwoCols("INVOICE #:", invoiceNo, 20, true)
+                        if (dateStr.isNotEmpty()) pTwoCols("DATE:", dateStr, 18, false)
+                        pTwoCols("CASHIER:", cashierName, 18, false)
+                        pTwoCols("CUSTOMER:", customerName, 18, false)
                         pLine("--------------------------------", 18, 1, false)
 
-                        pLine("ITEM DESCRIPTION", 18, 0, true)
+                        pTwoCols("LN  PRODUCT", "PRICE QTY TOTAL", 18, true)
                         pLine("--------------------------------", 18, 1, false)
 
+                        var lineNum = 1
                         for (item in items) {
-                            val desc = item["description"] as? String ?: ""
+                            val desc = (item["description"] as? String ?: "").uppercase()
                             val qty = item["qty"] as? String ?: "1"
                             val price = item["price"] as? String ?: ""
                             val itemDisc = item["discount"] as? String ?: ""
                             val total = item["total"] as? String ?: ""
 
-                            pLine(desc, 20, 0, true)
-                            pTwoCols("  $qty x $price", total, 18, false)
+                            val lnStr = String.format("%2d. ", lineNum)
+                            pLine(lnStr + desc, 19, 0, true)
+                            val priceQtyTotal = String.format("%9s %4s %9s", price, qty, total)
+                            val pad = (32 - priceQtyTotal.length).coerceAtLeast(0)
+                            pLine(" ".repeat(pad) + priceQtyTotal, 18, 0, false)
                             if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00" && itemDisc != "0.00") {
-                                pTwoCols("    Item Disc:", "-$itemDisc", 16, false)
+                                pTwoCols("    ITEM DISC:", "-$itemDisc", 16, false)
                             }
+                            lineNum++
                         }
                         pLine("--------------------------------", 18, 1, false)
 
-                        pTwoCols("Subtotal:", subtotal, 20, false)
+                        pTwoCols("SUBTOTAL:", subtotal, 20, false)
                         if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-                            pTwoCols("Discount:", "-$discount", 20, false)
+                            pTwoCols("DISCOUNT:", "-$discount", 20, false)
                         }
                         if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-                            pTwoCols("Tax:", tax, 20, false)
+                            pTwoCols("TAX:", tax, 20, false)
                         }
                         pLine("--------------------------------", 18, 1, false)
                         pTwoCols("GRAND TOTAL:", grandTotal, 24, true)
@@ -391,20 +396,20 @@ class Wpos3PrinterManager(private val context: Context) {
 
                         if (payments.isNotEmpty()) {
                             for (p in payments) {
-                                val method = p["method"] as? String ?: "Payment"
+                                val method = (p["method"] as? String ?: "PAYMENT").uppercase()
                                 val amt = p["amount"] as? String ?: ""
                                 pTwoCols(method, amt, 18, false)
                             }
                         }
 
-                        if (totalPaid.isNotEmpty()) pTwoCols("Total Paid:", totalPaid, 20, true)
+                        if (totalPaid.isNotEmpty()) pTwoCols("TOTAL PAID:", totalPaid, 20, true)
                         if (change.isNotEmpty() && change != "LKR 0.00" && change != "0.00") {
-                            pTwoCols("Change Returned:", change, 22, true)
+                            pTwoCols("CHANGE RETURNED:", change, 22, true)
                         }
 
                         pLine("--------------------------------", 18, 1, false)
                         pLine("THANK YOU FOR SHOPPING!", 18, 1, true)
-                        pLine("Please come again", 16, 1, false)
+                        pLine("PLEASE COME AGAIN", 16, 1, false)
                     }
 
                     // 4. Feed & Commit Print
@@ -439,11 +444,11 @@ class Wpos3PrinterManager(private val context: Context) {
                     return@Thread
                 }
 
-                val appName = movementData["appName"] as? String ?: "ONIMTA POS"
-                val type = movementData["type"] as? String ?: "CASH MOVEMENT"
+                val appName = (movementData["appName"] as? String ?: "ONIMTA POS").uppercase()
+                val type = (movementData["type"] as? String ?: "CASH MOVEMENT").uppercase()
                 val amount = movementData["amount"] as? String ?: ""
-                val reason = movementData["reason"] as? String ?: ""
-                val cashier = movementData["cashier"] as? String ?: "Admin"
+                val reason = (movementData["reason"] as? String ?: "").uppercase()
+                val cashier = (movementData["cashier"] as? String ?: "Admin").uppercase()
                 val dateTime = movementData["dateTime"] as? String ?: ""
 
                 val target = printerInstance ?: printerServiceBinder
@@ -677,7 +682,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
         fun drawCenter(text: String, size: Float, bold: Boolean = false) {
             paint.textSize = size
-            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
             paint.textAlign = Paint.Align.CENTER
             canvas.drawText(text, width / 2f, y, paint)
             y += size + 8f
@@ -694,7 +699,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
             paint.textSize = size
-            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
             paint.textAlign = Paint.Align.LEFT
             canvas.drawText(left, 14f, y, paint)
             paint.textAlign = Paint.Align.RIGHT
@@ -702,52 +707,82 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        drawCenter(appName, 28f, true)
-        drawCenter("TAX INVOICE RECEIPT", 18f, false)
+        fun drawTableCols(
+            ln: String,
+            product: String,
+            price: String,
+            qty: String,
+            total: String,
+            size: Float = 17f,
+            bold: Boolean = false
+        ) {
+            paint.textSize = size
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(ln, 14f, y, paint)
+            canvas.drawText(product, 46f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(price, 230f, y, paint)
+            canvas.drawText(qty, 285f, y, paint)
+            canvas.drawText(total, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        drawCenter(appName.uppercase(), 26f, true)
+        drawCenter("TAX INVOICE RECEIPT", 19f, true)
         drawDivider(false)
 
-        drawTwoCols("Invoice #:", invoiceNo, 20f, true)
-        if (dateStr.isNotEmpty()) drawTwoCols("Date:", dateStr, 18f, false)
-        drawTwoCols("Cashier:", cashierName, 18f, false)
-        drawTwoCols("Customer:", customerName, 18f, false)
+        drawTwoCols("INVOICE #:", invoiceNo, 20f, true)
+        if (dateStr.isNotEmpty()) drawTwoCols("DATE:", dateStr, 18f, false)
+        drawTwoCols("CASHIER:", cashierName.uppercase(), 18f, false)
+        drawTwoCols("CUSTOMER:", customerName.uppercase(), 18f, false)
         drawDivider()
 
-        paint.textSize = 18f
-        paint.typeface = Typeface.DEFAULT_BOLD
-        paint.textAlign = Paint.Align.LEFT
-        canvas.drawText("ITEM DESCRIPTION", 14f, y, paint)
-        y += 24f
+        drawTableCols("LN", "PRODUCT", "PRICE", "QTY", "TOTAL", size = 17f, bold = true)
         drawDivider(true)
 
+        var itemIndex = 1
         for (item in items) {
-            val desc = item["description"] as? String ?: ""
+            val desc = (item["description"] as? String ?: "").uppercase()
             val qty = item["qty"] as? String ?: "1"
             val price = item["price"] as? String ?: ""
             val itemDisc = item["discount"] as? String ?: ""
             val total = item["total"] as? String ?: ""
 
-            paint.textSize = 20f
-            paint.typeface = Typeface.DEFAULT_BOLD
+            // Line 1: LN and Product Name
+            paint.textSize = 18f
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
-            canvas.drawText(desc, 14f, y, paint)
+            val lnStr = String.format("%2d.", itemIndex)
+            canvas.drawText(lnStr, 14f, y, paint)
+            canvas.drawText(desc, 46f, y, paint)
             y += 24f
 
-            drawTwoCols("  $qty x $price", total, 18f, false)
+            // Line 2: Price, Qty, Total aligned under headers
+            paint.textSize = 17f
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(price, 230f, y, paint)
+            canvas.drawText(qty, 285f, y, paint)
+            canvas.drawText(total, (width - 14).toFloat(), y, paint)
+            y += 24f
+
             if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00" && itemDisc != "0.00") {
-                drawTwoCols("    Item Disc:", "-$itemDisc", 16f, false)
+                drawTwoCols("    ITEM DISC:", "-$itemDisc", 16f, false)
             }
+            itemIndex++
         }
         drawDivider()
 
-        drawTwoCols("Subtotal:", subtotal, 20f, false)
+        drawTwoCols("SUBTOTAL:", subtotal, 20f, false)
         if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-            drawTwoCols("Discount:", "-$discount", 20f, false)
+            drawTwoCols("DISCOUNT:", "-$discount", 20f, false)
         }
         if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00" && exchangeCredit != "0.00") {
-            drawTwoCols("Exchange Credit:", "-$exchangeCredit", 20f, false)
+            drawTwoCols("EXCHANGE CREDIT:", "-$exchangeCredit", 20f, false)
         }
         if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-            drawTwoCols("Tax:", tax, 20f, false)
+            drawTwoCols("TAX:", tax, 20f, false)
         }
         drawDivider(false)
         drawTwoCols("GRAND TOTAL:", grandTotal, 24f, true)
@@ -755,20 +790,20 @@ class Wpos3PrinterManager(private val context: Context) {
 
         if (payments.isNotEmpty()) {
             for (p in payments) {
-                val method = p["method"] as? String ?: "Payment"
+                val method = (p["method"] as? String ?: "PAYMENT").uppercase()
                 val amt = p["amount"] as? String ?: ""
                 drawTwoCols(method, amt, 19f, false)
             }
         }
 
-        if (totalPaid.isNotEmpty()) drawTwoCols("Total Paid:", totalPaid, 20f, true)
+        if (totalPaid.isNotEmpty()) drawTwoCols("TOTAL PAID:", totalPaid, 20f, true)
         if (change.isNotEmpty() && change != "LKR 0.00" && change != "0.00") {
-            drawTwoCols("Change Returned:", change, 22f, true)
+            drawTwoCols("CHANGE RETURNED:", change, 22f, true)
         }
 
         drawDivider(true)
         drawCenter("THANK YOU FOR YOUR BUSINESS!", 18f, true)
-        drawCenter("Please Come Again", 16f, false)
+        drawCenter("PLEASE COME AGAIN", 16f, false)
         y += 30f
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
@@ -822,19 +857,19 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        drawCenter(appName, 26f, true)
-        drawCenter(type, 20f, true)
+        drawCenter(appName.uppercase(), 26f, true)
+        drawCenter(type.uppercase(), 20f, true)
         drawDivider(false)
 
-        drawTwoCols("Amount:", amount, 24f, true)
-        drawTwoCols("Reason:", reason, 18f, false)
-        drawTwoCols("Cashier:", cashier, 18f, false)
-        drawTwoCols("Date & Time:", dateTime, 18f, false)
+        drawTwoCols("TOTAL $type:", amount, 24f, true)
+        drawTwoCols("REASON / REMARK:", reason.uppercase(), 18f, false)
+        drawTwoCols("CASHIER:", cashier.uppercase(), 18f, false)
+        drawTwoCols("DATE & TIME:", dateTime, 18f, false)
         drawDivider(true)
 
         y += 40f
         drawCenter("____________________________", 16f, false)
-        drawCenter("Cashier / Manager Signature", 16f, false)
+        drawCenter("CASHIER / MANAGER SIGNATURE", 16f, false)
         y += 30f
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
@@ -881,11 +916,11 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-        val title = reportData["title"] as? String ?: "SHIFT REPORT"
+        val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+        val title = (reportData["title"] as? String ?: "SHIFT REPORT").uppercase()
         val dayNumber = reportData["dayNumber"] as? String ?: ""
         val shiftNumber = reportData["shiftNumber"] as? String ?: ""
-        val cashier = reportData["cashier"] as? String ?: ""
+        val cashier = (reportData["cashier"] as? String ?: "").uppercase()
         val isEndReport = reportData["isEndReport"] as? Boolean ?: false
         val openingBalance = reportData["openingBalance"] as? String ?: ""
         val dateTime = reportData["dateTime"] as? String ?: ""
@@ -894,13 +929,13 @@ class Wpos3PrinterManager(private val context: Context) {
         drawCenter(title, 22f, true)
         drawDivider(false)
 
-        drawTwoCols("Business Day:", dayNumber, 19f, false)
-        drawTwoCols("Shift #:", shiftNumber, 19f, false)
-        drawTwoCols("Cashier:", cashier, 19f, false)
-        drawTwoCols("Date & Time:", dateTime, 17f, false)
+        drawTwoCols("BUSINESS DAY:", dayNumber, 19f, false)
+        drawTwoCols("SHIFT #:", shiftNumber, 19f, false)
+        drawTwoCols("CASHIER:", cashier, 19f, false)
+        drawTwoCols("DATE & TIME:", dateTime, 17f, false)
         drawDivider(true)
 
-        drawTwoCols("Opening Balance:", openingBalance, 20f, true)
+        drawTwoCols("OPENING BALANCE:", openingBalance, 20f, true)
 
         if (isEndReport) {
             val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
@@ -910,7 +945,7 @@ class Wpos3PrinterManager(private val context: Context) {
             val cashSales = reportData["cashSales"] as? String ?: ""
             val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
             val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-                if (k != null && v != null) k.toString() to v.toString() else null
+                if (k != null && v != null) k.toString().uppercase() to v.toString() else null
             }?.toMap() ?: emptyMap()
             val cardSales = reportData["cardSales"] as? String ?: ""
             val paidIn = reportData["paidIn"] as? String ?: ""
@@ -919,35 +954,35 @@ class Wpos3PrinterManager(private val context: Context) {
             val actualCash = reportData["actualCash"] as? String ?: ""
             val cashDiff = reportData["cashDiff"] as? String ?: ""
 
-            drawTwoCols("Total Invoices:", totalInvoices, 19f, false)
-            drawTwoCols("Gross Sales:", grossSales, 19f, false)
-            if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("Discount:", "-$discount", 19f, false)
+            drawTwoCols("TOTAL INVOICES:", totalInvoices, 19f, false)
+            drawTwoCols("GROSS SALES:", grossSales, 19f, false)
+            if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("DISCOUNT:", "-$discount", 19f, false)
             drawDivider(true)
             drawTwoCols("NET SALES:", netSales, 21f, true)
             drawDivider(true)
 
-            drawTwoCols("Cash Sales:", cashSales, 19f, true)
-            drawTwoCols("Non-Cash Sales:", nonCashSales, 19f, true)
+            drawTwoCols("CASH SALES:", cashSales, 19f, true)
+            drawTwoCols("NON-CASH SALES:", nonCashSales, 19f, true)
             if (nonCashBreakdown.isNotEmpty()) {
                 for ((method, amount) in nonCashBreakdown) {
-                    drawTwoCols("  • $method:", amount, 17f, false)
+                    drawTwoCols("  • ${method.uppercase()}:", amount, 17f, false)
                 }
             } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
-                drawTwoCols("  • Card Sales:", cardSales, 17f, false)
+                drawTwoCols("  • CARD SALES:", cardSales, 17f, false)
             }
-            drawTwoCols("Cash Paid In (+):", paidIn, 19f, false)
-            drawTwoCols("Cash Paid Out (-):", paidOut, 19f, false)
+            drawTwoCols("CASH PAID IN (+):", paidIn, 19f, false)
+            drawTwoCols("CASH PAID OUT (-):", paidOut, 19f, false)
             drawDivider(true)
 
-            drawTwoCols("Expected Cash:", expectedCash, 20f, true)
-            drawTwoCols("Actual Cash In Hand:", actualCash, 20f, true)
-            drawTwoCols("Cash Difference:", cashDiff, 21f, true)
+            drawTwoCols("EXPECTED CASH:", expectedCash, 20f, true)
+            drawTwoCols("ACTUAL CASH IN HAND:", actualCash, 20f, true)
+            drawTwoCols("CASH DIFFERENCE:", cashDiff, 21f, true)
         }
 
         drawDivider(false)
         y += 40f
         drawCenter("____________________________", 16f, false)
-        drawCenter("Supervisor / Cashier Signature", 16f, false)
+        drawCenter("SUPERVISOR / CASHIER SIGNATURE", 16f, false)
         y += 30f
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
@@ -987,7 +1022,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
             paint.textSize = size
-            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
             paint.textAlign = Paint.Align.LEFT
             canvas.drawText(left, 14f, y, paint)
             paint.textAlign = Paint.Align.RIGHT
@@ -995,41 +1030,75 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = exchangeData["appName"] as? String ?: "ONIMTA POS"
+        fun drawTableCols(
+            ln: String,
+            product: String,
+            price: String,
+            qty: String,
+            total: String,
+            size: Float = 17f,
+            bold: Boolean = false
+        ) {
+            paint.textSize = size
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(ln, 14f, y, paint)
+            canvas.drawText(product, 46f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(price, 230f, y, paint)
+            canvas.drawText(qty, 285f, y, paint)
+            canvas.drawText(total, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = (exchangeData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val voucherCode = exchangeData["voucherCode"] as? String ?: ""
         val totalAmount = exchangeData["totalAmount"] as? String ?: "LKR 0.00"
-        val customerName = exchangeData["customerName"] as? String ?: "Walk-in Customer"
-        val cashierName = exchangeData["cashierName"] as? String ?: "Admin"
+        val customerName = (exchangeData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+        val cashierName = (exchangeData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = exchangeData["dateTime"] as? String ?: ""
 
         drawCenter(appName, 26f, true)
         drawCenter("EXCHANGE VOUCHER / SLIP", 20f, true)
         drawDivider(false)
 
-        drawTwoCols("Voucher #:", voucherCode, 22f, true)
-        drawTwoCols("Date:", dateTime, 18f, false)
-        drawTwoCols("Cashier:", cashierName, 18f, false)
-        if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-            drawTwoCols("Customer:", customerName, 18f, false)
+        drawTwoCols("VOUCHER #:", voucherCode, 22f, true)
+        drawTwoCols("DATE:", dateTime, 18f, false)
+        drawTwoCols("CASHIER:", cashierName, 18f, false)
+        if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+            drawTwoCols("CUSTOMER:", customerName, 18f, false)
         }
         drawDivider(true)
 
-        drawCenter("EXCHANGED ITEMS RETURNED", 19f, true)
+        drawTableCols("LN", "PRODUCT", "PRICE", "QTY", "TOTAL", size = 17f, bold = true)
         drawDivider(true)
 
+        var itemIndex = 1
         for (item in items) {
-            val desc = item["description"] as? String ?: ""
+            val desc = (item["description"] as? String ?: "").uppercase()
             val qty = item["qty"] as? String ?: "1"
             val price = item["price"] as? String ?: ""
             val total = item["total"] as? String ?: ""
 
-            paint.textSize = 20f
-            paint.typeface = Typeface.DEFAULT_BOLD
+            // Line 1: LN and Product Name
+            paint.textSize = 18f
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
-            canvas.drawText(desc, 14f, y, paint)
-            y += 26f
+            val lnStr = String.format("%2d.", itemIndex)
+            canvas.drawText(lnStr, 14f, y, paint)
+            canvas.drawText(desc, 46f, y, paint)
+            y += 24f
 
-            drawTwoCols("  $qty x $price", total, 18f, false)
+            // Line 2: Price, Qty, Total aligned under headers
+            paint.textSize = 17f
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(price, 230f, y, paint)
+            canvas.drawText(qty, 285f, y, paint)
+            canvas.drawText(total, (width - 14).toFloat(), y, paint)
+            y += 24f
+
+            itemIndex++
         }
 
         drawDivider(false)
@@ -1094,7 +1163,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
             paint.textSize = size
-            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
             paint.textAlign = Paint.Align.LEFT
             canvas.drawText(left, 14f, y, paint)
             paint.textAlign = Paint.Align.RIGHT
@@ -1102,44 +1171,78 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = returnData["appName"] as? String ?: "ONIMTA POS"
+        fun drawTableCols(
+            ln: String,
+            product: String,
+            price: String,
+            qty: String,
+            total: String,
+            size: Float = 17f,
+            bold: Boolean = false
+        ) {
+            paint.textSize = size
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, if (bold) Typeface.BOLD else Typeface.NORMAL)
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText(ln, 14f, y, paint)
+            canvas.drawText(product, 46f, y, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(price, 230f, y, paint)
+            canvas.drawText(qty, 285f, y, paint)
+            canvas.drawText(total, (width - 14).toFloat(), y, paint)
+            y += size + 8f
+        }
+
+        val appName = (returnData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val returnNo = returnData["returnNo"] as? String ?: ""
         val refundAmount = returnData["refundAmount"] as? String ?: "LKR 0.00"
-        val paymentMethod = returnData["paymentMethod"] as? String ?: "Cash"
-        val reason = returnData["reason"] as? String ?: "Customer Return"
-        val customerName = returnData["customerName"] as? String ?: "Walk-in Customer"
-        val cashierName = returnData["cashierName"] as? String ?: "Admin"
+        val paymentMethod = (returnData["paymentMethod"] as? String ?: "CASH").uppercase()
+        val reason = (returnData["reason"] as? String ?: "CUSTOMER RETURN").uppercase()
+        val customerName = (returnData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+        val cashierName = (returnData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = returnData["dateTime"] as? String ?: ""
 
         drawCenter(appName, 26f, true)
         drawCenter("RETURN / REFUND RECEIPT", 20f, true)
         drawDivider(false)
 
-        drawTwoCols("Return Ref #:", returnNo, 20f, true)
-        drawTwoCols("Date:", dateTime, 18f, false)
-        drawTwoCols("Cashier:", cashierName, 18f, false)
-        if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-            drawTwoCols("Customer:", customerName, 18f, false)
+        drawTwoCols("RETURN REF #:", returnNo, 20f, true)
+        drawTwoCols("DATE:", dateTime, 18f, false)
+        drawTwoCols("CASHIER:", cashierName, 18f, false)
+        if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+            drawTwoCols("CUSTOMER:", customerName, 18f, false)
         }
-        drawTwoCols("Reason:", reason, 18f, false)
+        drawTwoCols("REASON:", reason, 18f, false)
         drawDivider(true)
 
-        drawCenter("RETURNED ITEMS", 19f, true)
+        drawTableCols("LN", "PRODUCT", "PRICE", "QTY", "TOTAL", size = 17f, bold = true)
         drawDivider(true)
 
+        var itemIndex = 1
         for (item in items) {
-            val desc = item["description"] as? String ?: ""
+            val desc = (item["description"] as? String ?: "").uppercase()
             val qty = item["qty"] as? String ?: "1"
             val price = item["price"] as? String ?: ""
             val total = item["total"] as? String ?: ""
 
-            paint.textSize = 20f
-            paint.typeface = Typeface.DEFAULT_BOLD
+            // Line 1: LN and Product Name
+            paint.textSize = 18f
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
-            canvas.drawText(desc, 14f, y, paint)
-            y += 26f
+            val lnStr = String.format("%2d.", itemIndex)
+            canvas.drawText(lnStr, 14f, y, paint)
+            canvas.drawText(desc, 46f, y, paint)
+            y += 24f
 
-            drawTwoCols("  $qty x $price", total, 18f, false)
+            // Line 2: Price, Qty, Total aligned under headers
+            paint.textSize = 17f
+            paint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText(price, 230f, y, paint)
+            canvas.drawText(qty, 285f, y, paint)
+            canvas.drawText(total, (width - 14).toFloat(), y, paint)
+            y += 24f
+
+            itemIndex++
         }
 
         drawDivider(false)
@@ -1149,10 +1252,10 @@ class Wpos3PrinterManager(private val context: Context) {
 
         y += 30f
         drawCenter("____________________________", 16f, false)
-        drawCenter("Cashier Signature", 16f, false)
+        drawCenter("CASHIER SIGNATURE", 16f, false)
         y += 20f
         drawCenter("____________________________", 16f, false)
-        drawCenter("Customer Signature", 16f, false)
+        drawCenter("CUSTOMER SIGNATURE", 16f, false)
         y += 20f
 
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
@@ -1249,27 +1352,27 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = holdData["appName"] as? String ?: "ONIMTA POS"
+        val appName = (holdData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val holdNo = holdData["holdNo"] as? String ?: ""
         val totalAmount = holdData["totalAmount"] as? String ?: "LKR 0.00"
-        val totalItems = holdData["totalItems"] as? String ?: "0 items"
-        val customerName = holdData["customerName"] as? String ?: "Walk-in Customer"
-        val cashierName = holdData["cashierName"] as? String ?: "Admin"
+        val totalItems = (holdData["totalItems"] as? String ?: "0 items").uppercase()
+        val customerName = (holdData["customerName"] as? String ?: "Walk-in Customer").uppercase()
+        val cashierName = (holdData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = holdData["dateTime"] as? String ?: ""
 
         drawCenter(appName, 26f, true)
         drawCenter("*** HELD BILL RECEIPT ***", 22f, true)
         drawDivider(false)
 
-        drawTwoCols("Hold Bill #:", holdNo, 22f, true)
-        drawTwoCols("Date:", dateTime, 18f, false)
-        drawTwoCols("Cashier:", cashierName, 18f, false)
-        if (customerName.isNotEmpty() && customerName != "Walk-in Customer") {
-            drawTwoCols("Customer:", customerName, 18f, false)
+        drawTwoCols("HOLD BILL #:", holdNo, 22f, true)
+        drawTwoCols("DATE:", dateTime, 18f, false)
+        drawTwoCols("CASHIER:", cashierName, 18f, false)
+        if (customerName.isNotEmpty() && customerName != "WALK-IN CUSTOMER") {
+            drawTwoCols("CUSTOMER:", customerName, 18f, false)
         }
         drawDivider(true)
 
-        drawTwoCols("Total Items:", totalItems, 20f, true)
+        drawTwoCols("TOTAL ITEMS:", totalItems, 20f, true)
         drawTwoCols("HELD AMOUNT:", totalAmount, 24f, true)
         drawDivider(false)
 
@@ -1430,10 +1533,10 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-        val title = reportData["title"] as? String ?: "ITEM-WISE SALES REPORT"
-        val period = reportData["period"] as? String ?: "Today"
-        val cashier = reportData["cashierName"] as? String ?: "Admin"
+        val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+        val title = (reportData["title"] as? String ?: "ITEM-WISE SALES REPORT").uppercase()
+        val period = (reportData["period"] as? String ?: "TODAY").uppercase()
+        val cashier = (reportData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = reportData["dateTime"] as? String ?: ""
         val totalQty = reportData["totalQuantity"] as? String ?: "0"
         val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
@@ -1442,9 +1545,9 @@ class Wpos3PrinterManager(private val context: Context) {
         drawCenter(title, 20f, true)
         drawDivider(false)
 
-        drawTwoCols("Period:", period, 18f, false)
-        drawTwoCols("Cashier:", cashier, 18f, false)
-        if (dateTime.isNotEmpty()) drawTwoCols("Date & Time:", dateTime, 18f, false)
+        drawTwoCols("PERIOD:", period, 18f, false)
+        drawTwoCols("CASHIER:", cashier, 18f, false)
+        if (dateTime.isNotEmpty()) drawTwoCols("DATE & TIME:", dateTime, 18f, false)
         drawDivider(true)
 
         paint.textSize = 18f
@@ -1457,7 +1560,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
         var rank = 1
         for (item in items) {
-            val desc = item["description"] as? String ?: ""
+            val desc = (item["description"] as? String ?: "").uppercase()
             val qty = item["qty"] as? String ?: "0"
             val total = item["total"] as? String ?: "LKR 0.00"
 
@@ -1467,7 +1570,7 @@ class Wpos3PrinterManager(private val context: Context) {
             canvas.drawText("$rank. $desc", 14f, y, paint)
             y += 24f
 
-            drawTwoCols("   Qty: $qty", total, 18f, false)
+            drawTwoCols("   QTY: $qty", total, 18f, false)
             rank++
         }
 
@@ -1521,10 +1624,10 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = reportData["appName"] as? String ?: "ONIMTA POS"
-        val title = reportData["title"] as? String ?: "TOTAL SALES REPORT"
-        val period = reportData["period"] as? String ?: "Today"
-        val cashier = reportData["cashierName"] as? String ?: "Admin"
+        val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
+        val title = (reportData["title"] as? String ?: "TOTAL SALES REPORT").uppercase()
+        val period = (reportData["period"] as? String ?: "TODAY").uppercase()
+        val cashier = (reportData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = reportData["dateTime"] as? String ?: ""
 
         val totalInvoices = reportData["totalInvoices"] as? String ?: "0"
@@ -1540,7 +1643,7 @@ class Wpos3PrinterManager(private val context: Context) {
         val cashSales = reportData["cashSales"] as? String ?: "LKR 0.00"
         val nonCashSales = reportData["nonCashSales"] as? String ?: "LKR 0.00"
         val nonCashBreakdown = (reportData["nonCashBreakdown"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-            if (k != null && v != null) k.toString() to v.toString() else null
+            if (k != null && v != null) k.toString().uppercase() to v.toString() else null
         }?.toMap() ?: emptyMap()
         val cardSales = reportData["cardSales"] as? String ?: "LKR 0.00"
         val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
@@ -1550,9 +1653,9 @@ class Wpos3PrinterManager(private val context: Context) {
         drawCenter(title, 22f, true)
         drawDivider(false)
 
-        drawTwoCols("Period:", period, 18f, false)
-        drawTwoCols("Cashier:", cashier, 18f, false)
-        if (dateTime.isNotEmpty()) drawTwoCols("Date:", dateTime, 18f, false)
+        drawTwoCols("PERIOD:", period, 18f, false)
+        drawTwoCols("CASHIER:", cashier, 18f, false)
+        if (dateTime.isNotEmpty()) drawTwoCols("DATE:", dateTime, 18f, false)
         drawDivider(true)
 
         paint.textSize = 18f
@@ -1561,13 +1664,13 @@ class Wpos3PrinterManager(private val context: Context) {
         canvas.drawText("SALES SUMMARY", 14f, y, paint)
         y += 24f
 
-        drawTwoCols("Total Invoices:", totalInvoices, 18f, false)
-        drawTwoCols("Gross Sales:", grossSales, 18f, false)
-        if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("Discounts:", "-$discount", 18f, false)
-        if (tax.isNotEmpty() && tax != "LKR 0.00") drawTwoCols("Tax:", tax, 18f, false)
+        drawTwoCols("TOTAL INVOICES:", totalInvoices, 18f, false)
+        drawTwoCols("GROSS SALES:", grossSales, 18f, false)
+        if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("DISCOUNTS:", "-$discount", 18f, false)
+        if (tax.isNotEmpty() && tax != "LKR 0.00") drawTwoCols("TAX:", tax, 18f, false)
         drawDivider(true)
-        drawTwoCols("Net Sales:", netSales, 20f, true)
-        if (returnsCount != "0") drawTwoCols("Returns ($returnsCount bills):", "-$returnsAmount", 18f, false)
+        drawTwoCols("NET SALES:", netSales, 20f, true)
+        if (returnsCount != "0") drawTwoCols("RETURNS ($returnsCount BILLS):", "-$returnsAmount", 18f, false)
         drawDivider(false)
         drawTwoCols("TOTAL NET REVENUE:", totalNetRevenue, 24f, true)
         drawDivider(false)
@@ -1578,16 +1681,16 @@ class Wpos3PrinterManager(private val context: Context) {
         canvas.drawText("PAYMENTS / TENDER BREAKDOWN", 14f, y, paint)
         y += 24f
 
-        drawTwoCols("Cash Sales:", cashSales, 18f, true)
-        drawTwoCols("Non-Cash Sales:", nonCashSales, 18f, true)
+        drawTwoCols("CASH SALES:", cashSales, 18f, true)
+        drawTwoCols("NON-CASH SALES:", nonCashSales, 18f, true)
         if (nonCashBreakdown.isNotEmpty()) {
             for ((method, amount) in nonCashBreakdown) {
-                drawTwoCols("  • $method:", amount, 16f, false)
+                drawTwoCols("  • ${method.uppercase()}:", amount, 16f, false)
             }
         } else {
-            if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) drawTwoCols("  • Card Sales:", cardSales, 16f, false)
-            if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) drawTwoCols("  • QR / Online:", qrSales, 16f, false)
-            if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) drawTwoCols("  • Credit Sales:", creditSales, 16f, false)
+            if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) drawTwoCols("  • CARD SALES:", cardSales, 16f, false)
+            if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) drawTwoCols("  • QR / ONLINE:", qrSales, 16f, false)
+            if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) drawTwoCols("  • CREDIT SALES:", creditSales, 16f, false)
         }
         drawDivider(false)
         y += 20f
