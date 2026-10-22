@@ -29,6 +29,10 @@ import com.zcs.sdk.print.PrnTextStyle
  * 5. Full support for auto-cutter / tear bar paper advance.
  */
 class Z93PrinterManager(private val context: Context) {
+    companion object {
+        const val PAPER_WIDTH = 576 // 80mm thermal paper = 576 dots
+    }
+
     private val TAG = "Z93PrinterManager"
 
     private var driverManager: DriverManager? = null
@@ -94,9 +98,7 @@ class Z93PrinterManager(private val context: Context) {
         private val context: Context,
         private val fontType: String = activeFont
     ) {
-        companion object {
-            const val PAPER_WIDTH = 576 // 80mm thermal paper = 576 dots
-        }
+
 
         private fun getPrnFont(): PrnTextFont {
             return when (fontType.uppercase()) {
@@ -145,13 +147,38 @@ class Z93PrinterManager(private val context: Context) {
                 return
             }
             try {
-                val format = PrnStrFormat().apply {
-                    textSize = size
-                    font = getPrnFont()
-                    style = if (bold) PrnTextStyle.BOLD else PrnTextStyle.NORMAL
-                    ali = align
+                val paint = Paint().apply {
+                    textSize = size.toFloat()
+                    typeface = getTypeface(bold)
+                    color = Color.BLACK
+                    isAntiAlias = false
+                    if (bold) isFakeBoldText = true
                 }
-                p.setPrintAppendString(text, format, PAPER_WIDTH)
+                val fm = paint.fontMetrics
+                val lineHeight = (fm.descent - fm.ascent).toInt()
+                val baseline = -fm.ascent
+                val paddingY = 2
+                val h = lineHeight + (paddingY * 2)
+
+                val bmp = Bitmap.createBitmap(PAPER_WIDTH, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(Color.WHITE)
+
+                val leftX = 8f
+                val rightX = (PAPER_WIDTH - 8).toFloat()
+
+                val x = when (align) {
+                    Layout.Alignment.ALIGN_CENTER -> PAPER_WIDTH / 2f
+                    Layout.Alignment.ALIGN_OPPOSITE -> rightX
+                    else -> leftX
+                }
+                paint.textAlign = when (align) {
+                    Layout.Alignment.ALIGN_CENTER -> Paint.Align.CENTER
+                    Layout.Alignment.ALIGN_OPPOSITE -> Paint.Align.RIGHT
+                    else -> Paint.Align.LEFT
+                }
+                canvas.drawText(text, x, baseline + paddingY, paint)
+                p.setPrintAppendBitmap(bmp, Layout.Alignment.ALIGN_NORMAL, PAPER_WIDTH)
             } catch (e: Throwable) {
                 Log.w("Z93Printer", "printText error: ${e.message}")
             }
@@ -160,8 +187,9 @@ class Z93PrinterManager(private val context: Context) {
         fun printTwoCols(
             left: String,
             right: String,
-            size: Int = 22,
-            bold: Boolean = false
+            size: Int = 23,
+            bold: Boolean = false,
+            indent: Float = 8f
         ) {
             try {
                 val paint = Paint().apply {
@@ -179,10 +207,10 @@ class Z93PrinterManager(private val context: Context) {
                 val paddingY = 2
                 val leftWidth = paint.measureText(left)
                 val rightWidth = paint.measureText(right)
-                val leftX = 6f
+                val leftX = indent
                 val rightX = (PAPER_WIDTH - 8).toFloat()
 
-                if (leftWidth + rightWidth + 16f <= (PAPER_WIDTH - 12)) {
+                if (leftWidth + rightWidth + 16f <= (PAPER_WIDTH - (indent + 8f))) {
                     val h = textHeight + (paddingY * 2)
                     val bmp = Bitmap.createBitmap(PAPER_WIDTH, h, Bitmap.Config.ARGB_8888)
                     val canvas = Canvas(bmp)
@@ -259,9 +287,279 @@ class Z93PrinterManager(private val context: Context) {
             }
         }
 
+        private fun wrapText(text: String, maxWidth: Float, paint: Paint): List<String> {
+            val words = text.split(" ")
+            val lines = mutableListOf<String>()
+            var currentLine = StringBuilder()
+
+            for (word in words) {
+                if (word.isEmpty()) continue
+                val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+                if (paint.measureText(testLine) <= maxWidth) {
+                    currentLine = StringBuilder(testLine)
+                } else {
+                    if (currentLine.isNotEmpty()) {
+                        lines.add(currentLine.toString())
+                        currentLine = StringBuilder(word)
+                    } else {
+                        var remaining = word
+                        while (remaining.isNotEmpty()) {
+                            var count = remaining.length
+                            while (count > 0 && paint.measureText(remaining.substring(0, count)) > maxWidth) {
+                                count--
+                            }
+                            if (count == 0) count = 1
+                            lines.add(remaining.substring(0, count))
+                            remaining = remaining.substring(count)
+                        }
+                    }
+                }
+            }
+            if (currentLine.isNotEmpty()) {
+                lines.add(currentLine.toString())
+            }
+            return lines
+        }
+
+        fun printTableHeader(
+            size: Int = 23,
+            bold: Boolean = true
+        ) {
+            try {
+                val paint = Paint().apply {
+                    textSize = size.toFloat()
+                    typeface = getTypeface(bold)
+                    color = Color.BLACK
+                    isAntiAlias = false
+                    if (bold) isFakeBoldText = true
+                }
+                val fm = paint.fontMetrics
+                val textHeight = (fm.descent - fm.ascent).toInt()
+                val baseline = -fm.ascent
+                val paddingY = 2
+                val h = textHeight + (paddingY * 2)
+
+                val bmp = Bitmap.createBitmap(PAPER_WIDTH, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(Color.WHITE)
+
+                val leftX = 8f
+                val productX = 58f
+                val priceX = 330f
+                val qtyCenterX = 415f
+                val totalX = (PAPER_WIDTH - 8).toFloat()
+
+                // LN
+                paint.textAlign = Paint.Align.LEFT
+                canvas.drawText("LN", leftX, baseline + paddingY, paint)
+
+                // PRODUCT
+                canvas.drawText("PRODUCT", productX, baseline + paddingY, paint)
+
+                // PRICE
+                paint.textAlign = Paint.Align.RIGHT
+                canvas.drawText("PRICE", priceX, baseline + paddingY, paint)
+
+                // QTY
+                paint.textAlign = Paint.Align.CENTER
+                canvas.drawText("QTY", qtyCenterX, baseline + paddingY, paint)
+
+                // TOTAL
+                paint.textAlign = Paint.Align.RIGHT
+                canvas.drawText("TOTAL", totalX, baseline + paddingY, paint)
+
+                p.setPrintAppendBitmap(bmp, Layout.Alignment.ALIGN_NORMAL, PAPER_WIDTH)
+            } catch (e: Throwable) {
+                Log.w("Z93Printer", "printTableHeader error: ${e.message}")
+            }
+        }
+
+        fun printProductRow(
+            ln: Int,
+            desc: String,
+            size: Int = 23,
+            bold: Boolean = true
+        ) {
+            try {
+                val paint = Paint().apply {
+                    textSize = size.toFloat()
+                    typeface = getTypeface(bold)
+                    color = Color.BLACK
+                    isAntiAlias = false
+                    if (bold) isFakeBoldText = true
+                }
+                val fm = paint.fontMetrics
+                val lineHeight = (fm.descent - fm.ascent).toInt()
+                val baseline = -fm.ascent
+                val paddingY = 2
+
+                val leftX = 8f
+                val productX = 58f
+                val maxTextWidth = (PAPER_WIDTH - 8) - productX
+
+                val descLines = wrapText(desc, maxTextWidth, paint)
+                if (descLines.isEmpty()) {
+                    return
+                }
+
+                val totalHeight = (descLines.size * lineHeight) + (paddingY * 2)
+                val bmp = Bitmap.createBitmap(PAPER_WIDTH, totalHeight, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(Color.WHITE)
+
+                paint.textAlign = Paint.Align.LEFT
+                // Line number only on line 1, perfectly matching "LN" header at leftX
+                canvas.drawText(String.format("%2d.", ln), leftX, baseline + paddingY, paint)
+
+                // Every line of description starts strictly at productX under "PRODUCT" column
+                for (i in descLines.indices) {
+                    val y = baseline + paddingY + (i * lineHeight)
+                    canvas.drawText(descLines[i], productX, y, paint)
+                }
+
+                p.setPrintAppendBitmap(bmp, Layout.Alignment.ALIGN_NORMAL, PAPER_WIDTH)
+            } catch (e: Throwable) {
+                Log.w("Z93Printer", "printProductRow error: ${e.message}")
+            }
+        }
+
+        fun printItemValues(
+            price: String,
+            qty: String,
+            total: String,
+            size: Int = 23,
+            bold: Boolean = true
+        ) {
+            try {
+                val paint = Paint().apply {
+                    textSize = size.toFloat()
+                    typeface = getTypeface(bold)
+                    color = Color.BLACK
+                    isAntiAlias = false
+                    if (bold) {
+                        isFakeBoldText = true
+                    }
+                }
+                val fm = paint.fontMetrics
+                val textHeight = (fm.descent - fm.ascent).toInt()
+                val baseline = -fm.ascent
+                val paddingY = 2
+                val h = textHeight + (paddingY * 2)
+
+                val bmp = Bitmap.createBitmap(PAPER_WIDTH, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(Color.WHITE)
+
+                val priceX = 330f
+                val qtyCenterX = 415f
+                val totalX = (PAPER_WIDTH - 8).toFloat()
+
+                // Price (aligned right with "PRICE" header)
+                paint.textAlign = Paint.Align.RIGHT
+                canvas.drawText(cleanAmount(price), priceX, baseline + paddingY, paint)
+
+                // Qty (aligned center with "QTY" header)
+                paint.textAlign = Paint.Align.CENTER
+                canvas.drawText(qty, qtyCenterX, baseline + paddingY, paint)
+
+                // Total (aligned right with "TOTAL" header and financial totals)
+                paint.textAlign = Paint.Align.RIGHT
+                canvas.drawText(cleanAmount(total), totalX, baseline + paddingY, paint)
+
+                p.setPrintAppendBitmap(bmp, Layout.Alignment.ALIGN_NORMAL, PAPER_WIDTH)
+            } catch (e: Throwable) {
+                Log.w("Z93Printer", "printItemValues error: ${e.message}")
+            }
+        }
+
+        fun printItemCols(
+            col1: String,
+            col2: String,
+            col3: String,
+            col4: String,
+            size: Int = 23,
+            bold: Boolean = true
+        ) {
+            if (col1.contains("PRODUCT", ignoreCase = true) || col1.contains("LN", ignoreCase = true)) {
+                printTableHeader(size, bold)
+            } else if (col1.isEmpty()) {
+                printItemValues(col2, col3, col4, size, bold)
+            } else {
+                try {
+                    val paint = Paint().apply {
+                        textSize = size.toFloat()
+                        typeface = getTypeface(bold)
+                        color = Color.BLACK
+                        isAntiAlias = false
+                        if (bold) isFakeBoldText = true
+                    }
+                    val fm = paint.fontMetrics
+                    val textHeight = (fm.descent - fm.ascent).toInt()
+                    val baseline = -fm.ascent
+                    val paddingY = 2
+                    val h = textHeight + (paddingY * 2)
+
+                    val bmp = Bitmap.createBitmap(PAPER_WIDTH, h, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bmp)
+                    canvas.drawColor(Color.WHITE)
+
+                    val leftX = 8f
+                    val priceX = 330f
+                    val qtyCenterX = 415f
+                    val totalX = (PAPER_WIDTH - 8).toFloat()
+
+                    paint.textAlign = Paint.Align.LEFT
+                    canvas.drawText(col1, leftX, baseline + paddingY, paint)
+
+                    paint.textAlign = Paint.Align.RIGHT
+                    if (col2.isNotEmpty()) canvas.drawText(col2, priceX, baseline + paddingY, paint)
+
+                    paint.textAlign = Paint.Align.CENTER
+                    if (col3.isNotEmpty()) canvas.drawText(col3, qtyCenterX, baseline + paddingY, paint)
+
+                    paint.textAlign = Paint.Align.RIGHT
+                    if (col4.isNotEmpty()) canvas.drawText(col4, totalX, baseline + paddingY, paint)
+
+                    p.setPrintAppendBitmap(bmp, Layout.Alignment.ALIGN_NORMAL, PAPER_WIDTH)
+                } catch (e: Throwable) {
+                    Log.w("Z93Printer", "printItemCols error: ${e.message}")
+                }
+            }
+        }
+
+        fun cleanAmount(amountStr: String): String {
+            return amountStr.replace("Rs.", "", ignoreCase = true)
+                .replace("Rs", "", ignoreCase = true)
+                .replace("LKR", "", ignoreCase = true)
+                .trim()
+        }
+
+        fun cleanPrice(priceStr: String) = cleanAmount(priceStr)
+
         fun printDivider(lineChar: String = "-", totalChars: Int = 48) {
-            val line = lineChar.repeat(totalChars / lineChar.length)
-            printText(line, 20, false, Layout.Alignment.ALIGN_CENTER)
+            try {
+                val h = 14
+                val bmp = Bitmap.createBitmap(PAPER_WIDTH, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(Color.WHITE)
+                val paint = Paint().apply {
+                    color = Color.BLACK
+                    strokeWidth = if (lineChar == "=") 2.5f else 1.5f
+                    isAntiAlias = false
+                }
+                val leftX = 8f
+                val rightX = (PAPER_WIDTH - 8).toFloat()
+                val y = h / 2f
+                if (lineChar == "=") {
+                    canvas.drawLine(leftX, y - 2.5f, rightX, y - 2.5f, paint)
+                    canvas.drawLine(leftX, y + 2.5f, rightX, y + 2.5f, paint)
+                } else {
+                    canvas.drawLine(leftX, y, rightX, y, paint)
+                }
+                p.setPrintAppendBitmap(bmp, Layout.Alignment.ALIGN_NORMAL, PAPER_WIDTH)
+            } catch (e: Throwable) {
+                Log.w("Z93Printer", "printDivider error: ${e.message}")
+            }
         }
 
         fun printSpace(lines: Int = 1) {
@@ -388,7 +686,7 @@ class Z93PrinterManager(private val context: Context) {
                 s.printDivider("-", 48)
 
                 // 3. Items List
-                s.printTwoCols("LN  PRODUCT", "PRICE  QTY   TOTAL", size = 22, bold = true)
+                s.printTableHeader(size = 23, bold = true)
                 s.printDivider("-", 48)
 
                 var ln = 1
@@ -399,43 +697,43 @@ class Z93PrinterManager(private val context: Context) {
                     val itemDisc = item["discount"] as? String ?: ""
                     val total = item["total"] as? String ?: ""
 
-                    s.printText(String.format("%2d. %s", ln, desc), size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                    val priceQtyTotal = String.format("%10s %5s %12s", price, qty, total)
-                    s.printText(priceQtyTotal, size = 22, bold = false, align = Layout.Alignment.ALIGN_OPPOSITE)
+                    s.printProductRow(ln, desc, size = 23, bold = true)
+                    s.printItemValues(price, qty, total, size = 23, bold = true)
                     if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00" && itemDisc != "0.00") {
-                        s.printTwoCols("    ITEM DISC:", "-$itemDisc", size = 20, bold = false)
+                        val cleanDisc = s.cleanAmount(itemDisc)
+                        s.printTwoCols("    ITEM DISC:", "-$cleanDisc", size = 20, bold = false)
                     }
                     ln++
                 }
                 s.printDivider("-", 48)
 
                 // 4. Financial Summary
-                s.printTwoCols("SUBTOTAL:", subtotal, size = 24, bold = false)
+                s.printTwoCols("SUBTOTAL:", s.cleanAmount(subtotal), size = 23, bold = false)
                 if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-                    s.printTwoCols("DISCOUNT:", "-$discount", size = 24, bold = false)
+                    s.printTwoCols("DISCOUNT:", "-${s.cleanAmount(discount)}", size = 23, bold = false)
                 }
                 if (exchangeCredit.isNotEmpty() && exchangeCredit != "LKR 0.00" && exchangeCredit != "0.00") {
-                    s.printTwoCols("EXCHANGE CREDIT:", "-$exchangeCredit", size = 24, bold = false)
+                    s.printTwoCols("EXCHANGE CREDIT:", "-${s.cleanAmount(exchangeCredit)}", size = 23, bold = false)
                 }
                 if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-                    s.printTwoCols("TAX:", tax, size = 24, bold = false)
+                    s.printTwoCols("TAX:", s.cleanAmount(tax), size = 23, bold = false)
                 }
                 s.printDivider("=", 48)
-                s.printTwoCols("GRAND TOTAL:", grandTotal, size = 28, bold = true)
+                s.printTwoCols("GRAND TOTAL (LKR):", s.cleanAmount(grandTotal), size = 32, bold = true)
                 s.printDivider("=", 48)
 
                 // 5. Payments Breakdown
                 if (payments.isNotEmpty()) {
-                    s.printText("PAYMENTS:", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                    s.printTwoCols("PAYMENTS:", "", size = 23, bold = true)
                     for (pay in payments) {
                         val method = (pay["method"] as? String ?: "PAYMENT").uppercase()
                         val amt = pay["amount"] as? String ?: ""
-                        s.printTwoCols(method, amt, size = 22, bold = false)
+                        s.printTwoCols("  $method", s.cleanAmount(amt), size = 22, bold = false, indent = 24f)
                     }
                 }
-                if (totalPaid.isNotEmpty()) s.printTwoCols("TOTAL PAID:", totalPaid, size = 24, bold = true)
+                if (totalPaid.isNotEmpty()) s.printTwoCols("TOTAL PAID:", s.cleanAmount(totalPaid), size = 23, bold = true)
                 if (change.isNotEmpty() && change != "LKR 0.00" && change != "0.00") {
-                    s.printTwoCols("CHANGE RETURNED:", change, size = 24, bold = true)
+                    s.printTwoCols("CHANGE RETURNED:", s.cleanAmount(change), size = 23, bold = true)
                 }
                 s.printDivider("-", 48)
 
@@ -539,11 +837,11 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText(title, size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                if (dayNumber.isNotEmpty()) s.printTwoCols("DAY #:", dayNumber, size = 22, bold = false)
-                if (shiftNo.isNotEmpty()) s.printTwoCols("SHIFT #:", shiftNo, size = 22, bold = false)
-                s.printTwoCols("CASHIER:", cashier, size = 22, bold = false)
-                if (dateTime.isNotEmpty()) s.printTwoCols("DATE / TIME:", dateTime, size = 22, bold = false)
-                if (openedAt.isNotEmpty()) s.printTwoCols("OPENED AT:", openedAt, size = 22, bold = false)
+                if (dayNumber.isNotEmpty()) s.printTwoCols("DAY #:", dayNumber, size = 22, bold = true)
+                if (shiftNo.isNotEmpty()) s.printTwoCols("SHIFT #:", shiftNo, size = 22, bold = true)
+                s.printTwoCols("CASHIER:", cashier, size = 22, bold = true)
+                if (dateTime.isNotEmpty()) s.printTwoCols("DATE / TIME:", dateTime, size = 22, bold = true)
+                if (openedAt.isNotEmpty()) s.printTwoCols("OPENED AT:", openedAt, size = 22, bold = true)
                 s.printDivider("-", 48)
 
                 if (!isEndReport) {
@@ -573,32 +871,32 @@ class Z93PrinterManager(private val context: Context) {
                     val difference = (shiftData["cashDiff"] as? String)?.takeIf { it.isNotEmpty() }
                         ?: (shiftData["difference"] as? String) ?: "LKR 0.00"
 
-                    s.printTwoCols("OPENING FLOAT:", openingFloat, size = 22, bold = false)
-                    s.printTwoCols("TOTAL INVOICES:", totalInvoices, size = 22, bold = false)
-                    s.printTwoCols("GROSS SALES:", grossSales, size = 22, bold = false)
+                    s.printTwoCols("OPENING FLOAT:", openingFloat, size = 22, bold = true)
+                    s.printTwoCols("TOTAL INVOICES:", totalInvoices, size = 22, bold = true)
+                    s.printTwoCols("GROSS SALES:", grossSales, size = 22, bold = true)
                     if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-                        s.printTwoCols("DISCOUNTS:", "-$discount", size = 22, bold = false)
+                        s.printTwoCols("DISCOUNTS:", "-$discount", size = 22, bold = true)
                     }
                     if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-                        s.printTwoCols("TAX:", tax, size = 22, bold = false)
+                        s.printTwoCols("TAX:", tax, size = 22, bold = true)
                     }
-                    s.printTwoCols("NET SALES:", netSales, size = 24, bold = true)
+                    s.printTwoCols("NET SALES:", netSales, size = 25, bold = true)
                     s.printDivider("-", 48)
 
                     s.printTwoCols("CASH SALES:", cashSales, size = 22, bold = true)
                     s.printTwoCols("NON-CASH SALES:", nonCashSales, size = 22, bold = true)
                     if (nonCashBreakdown.isNotEmpty()) {
                         for ((method, amount) in nonCashBreakdown) {
-                            s.printTwoCols("  • ${method.uppercase()}:", amount, size = 20, bold = false)
+                            s.printTwoCols("  • ${method.uppercase()}:", amount, size = 20, bold = true)
                         }
                     } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00" && cardSales != "0.00") {
-                        s.printTwoCols("  • CARD SALES:", cardSales, size = 20, bold = false)
+                        s.printTwoCols("  • CARD SALES:", cardSales, size = 20, bold = true)
                     }
                     if (paidIn.isNotEmpty() && paidIn != "LKR 0.00" && paidIn != "0.00") {
-                        s.printTwoCols("PAID IN (+):", paidIn, size = 22, bold = false)
+                        s.printTwoCols("PAID IN (+):", paidIn, size = 22, bold = true)
                     }
                     if (paidOut.isNotEmpty() && paidOut != "LKR 0.00" && paidOut != "0.00") {
-                        s.printTwoCols("PAID OUT (-):", paidOut, size = 22, bold = false)
+                        s.printTwoCols("PAID OUT (-):", paidOut, size = 22, bold = true)
                     }
                     s.printDivider("-", 48)
 
@@ -731,7 +1029,7 @@ class Z93PrinterManager(private val context: Context) {
                 }
                 s.printDivider("-", 48)
 
-                s.printTwoCols("LN  PRODUCT", "PRICE  QTY   TOTAL", size = 22, bold = true)
+                s.printTableHeader(size = 23, bold = true)
                 s.printDivider("-", 48)
 
                 var ln = 1
@@ -740,15 +1038,14 @@ class Z93PrinterManager(private val context: Context) {
                     val qty = item["qty"] as? String ?: "1"
                     val price = item["price"] as? String ?: ""
                     val total = item["total"] as? String ?: ""
-                    s.printText(String.format("%2d. %s", ln, desc), size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                    val priceQtyTotal = String.format("%10s %5s %12s", price, qty, total)
-                    s.printText(priceQtyTotal, size = 22, bold = false, align = Layout.Alignment.ALIGN_OPPOSITE)
+                    s.printProductRow(ln, desc, size = 23, bold = true)
+                    s.printItemValues(price, qty, total, size = 23, bold = true)
                     ln++
                 }
                 s.printDivider("-", 48)
 
-                s.printTwoCols("REFUNDED VIA:", paymentMethod, size = 24, bold = true)
-                s.printTwoCols("TOTAL REFUNDED:", refundAmount, size = 26, bold = true)
+                s.printTwoCols("REFUNDED VIA:", paymentMethod, size = 23, bold = true)
+                s.printTwoCols("TOTAL REFUNDED (LKR):", s.cleanAmount(refundAmount), size = 32, bold = true)
                 s.printDivider("-", 48)
 
                 s.printSpace(1)
@@ -810,8 +1107,10 @@ class Z93PrinterManager(private val context: Context) {
                         val qty = item["qty"] as? String ?: "1"
                         val price = item["price"] as? String ?: ""
                         val total = item["total"] as? String ?: ""
+                        val cleanPrice = s.cleanAmount(price)
+                        val cleanTotal = s.cleanAmount(total)
                         s.printText(desc, size = 24, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                        s.printTwoCols("  $qty x $price", total, size = 22, bold = false)
+                        s.printTwoCols("  $qty x $cleanPrice", cleanTotal, size = 22, bold = false)
                     }
                     s.printDivider("-", 48)
                 }
@@ -950,46 +1249,46 @@ class Z93PrinterManager(private val context: Context) {
                 s.printText(title, size = 24, bold = true, align = Layout.Alignment.ALIGN_CENTER)
                 s.printDivider("-", 48)
 
-                s.printTwoCols("PERIOD:", period, size = 22, bold = false)
-                s.printTwoCols("CASHIER:", cashier, size = 22, bold = false)
+                s.printTwoCols("PERIOD:", period, size = 22, bold = true)
+                s.printTwoCols("CASHIER:", cashier, size = 22, bold = true)
                 if (dateTime.isNotEmpty()) {
-                    s.printTwoCols("DATE:", dateTime, size = 22, bold = false)
+                    s.printTwoCols("DATE:", dateTime, size = 22, bold = true)
                 }
                 s.printDivider("-", 48)
 
-                s.printText("SALES SUMMARY", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
-                s.printTwoCols("TOTAL INVOICES:", totalInvoices, size = 22, bold = false)
-                s.printTwoCols("GROSS SALES:", grossSales, size = 22, bold = false)
+                s.printText("SALES SUMMARY", size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printTwoCols("TOTAL INVOICES:", totalInvoices, size = 22, bold = true)
+                s.printTwoCols("GROSS SALES:", grossSales, size = 22, bold = true)
                 if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
-                    s.printTwoCols("DISCOUNTS:", "-$discount", size = 22, bold = false)
+                    s.printTwoCols("DISCOUNTS:", "-$discount", size = 22, bold = true)
                 }
                 if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
-                    s.printTwoCols("TAX:", tax, size = 22, bold = false)
+                    s.printTwoCols("TAX:", tax, size = 22, bold = true)
                 }
-                s.printTwoCols("NET SALES:", netSales, size = 24, bold = true)
+                s.printTwoCols("NET SALES:", netSales, size = 25, bold = true)
                 if (returnsCount != "0" && returnsCount.isNotEmpty()) {
-                    s.printTwoCols("RETURNS ($returnsCount bills):", "-$returnsAmount", size = 22, bold = false)
+                    s.printTwoCols("RETURNS ($returnsCount bills):", "-$returnsAmount", size = 22, bold = true)
                 }
                 s.printDivider("-", 48)
-                s.printTwoCols("TOTAL NET REVENUE:", totalNetRevenue, size = 28, bold = true)
+                s.printTwoCols("TOTAL NET REVENUE:", totalNetRevenue, size = 26, bold = true)
                 s.printDivider("-", 48)
 
-                s.printText("PAYMENTS / TENDER BREAKDOWN", size = 22, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
+                s.printText("PAYMENTS / TENDER BREAKDOWN", size = 23, bold = true, align = Layout.Alignment.ALIGN_NORMAL)
                 s.printTwoCols("CASH SALES:", cashSales, size = 22, bold = true)
                 s.printTwoCols("NON-CASH SALES:", nonCashSales, size = 22, bold = true)
                 if (nonCashBreakdown.isNotEmpty()) {
                     for ((method, amount) in nonCashBreakdown) {
-                        s.printTwoCols("  • ${method.uppercase()}:", amount, size = 20, bold = false)
+                        s.printTwoCols("  • ${method.uppercase()}:", amount, size = 20, bold = true)
                     }
                 } else {
                     if (cardSales != "LKR 0.00" && cardSales.isNotEmpty()) {
-                        s.printTwoCols("  • CARD SALES:", cardSales, size = 20, bold = false)
+                        s.printTwoCols("  • CARD SALES:", cardSales, size = 20, bold = true)
                     }
                     if (qrSales != "LKR 0.00" && qrSales.isNotEmpty()) {
-                        s.printTwoCols("  • QR / ONLINE:", qrSales, size = 20, bold = false)
+                        s.printTwoCols("  • QR / ONLINE:", qrSales, size = 20, bold = true)
                     }
                     if (creditSales != "LKR 0.00" && creditSales.isNotEmpty()) {
-                        s.printTwoCols("  • CREDIT SALES:", creditSales, size = 20, bold = false)
+                        s.printTwoCols("  • CREDIT SALES:", creditSales, size = 20, bold = true)
                     }
                 }
                 s.printDivider("-", 48)

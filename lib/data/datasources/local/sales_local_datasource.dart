@@ -15,7 +15,7 @@ abstract class SalesLocalDataSource {
   Future<int> markSaleSynced(int saleId, String syncedAt);
   Future<List<Sale>> getUnsyncedSales();
   Future<int> deleteSale(int saleId);
-  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'});
+  Future<String> generateNextInvoiceNumber({String prefix = ''});
   Future<double> getTodayTotalSales();
   Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter});
   Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter});
@@ -69,6 +69,7 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
       DatabaseConstants.tableSales,
       where: '${DatabaseConstants.colInvoiceNo} = ?',
       whereArgs: [invoiceNo.trim()],
+      orderBy: '${DatabaseConstants.colId} DESC',
       limit: 1,
     );
     if (results.isEmpty) return null;
@@ -180,43 +181,87 @@ class SalesLocalDataSourceImpl implements SalesLocalDataSource {
   }
 
   @override
-  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'}) async {
+  Future<String> generateNextInvoiceNumber({String prefix = ''}) async {
+    // 1. Determine active business day or today's starting timestamp
     final now = DateTime.now();
-    final datePrefix = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final searchPattern = '$prefix$datePrefix%';
-    
+    final todayMidnight = DateTime(now.year, now.month, now.day).toIso8601String();
+    String dayStartTime = todayMidnight;
+
+    try {
+      final activeDays = await _databaseService.query(
+        DatabaseConstants.tableBusinessDays,
+        where: '${DatabaseConstants.colStatus} = ?',
+        whereArgs: ['OPEN'],
+        orderBy: '${DatabaseConstants.colId} DESC',
+        limit: 1,
+      );
+      if (activeDays.isNotEmpty && activeDays.first[DatabaseConstants.colOpenedAt] != null) {
+        dayStartTime = activeDays.first[DatabaseConstants.colOpenedAt] as String;
+      } else {
+        // If no open business day, check if there was a closed business day today
+        final lastDays = await _databaseService.query(
+          DatabaseConstants.tableBusinessDays,
+          where: '${DatabaseConstants.colStatus} = ?',
+          whereArgs: ['CLOSED'],
+          orderBy: '${DatabaseConstants.colId} DESC',
+          limit: 1,
+        );
+        if (lastDays.isNotEmpty && lastDays.first[DatabaseConstants.colClosedAt] != null) {
+          final closedAtStr = lastDays.first[DatabaseConstants.colClosedAt] as String;
+          if (closedAtStr.compareTo(todayMidnight) >= 0) {
+            dayStartTime = closedAtStr;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Query all sales created during this day cycle
     final results = await _databaseService.rawQuery(
-      'SELECT ${DatabaseConstants.colInvoiceNo} FROM ${DatabaseConstants.tableSales} WHERE ${DatabaseConstants.colInvoiceNo} LIKE ?',
-      [searchPattern],
+      'SELECT ${DatabaseConstants.colInvoiceNo} FROM ${DatabaseConstants.tableSales} WHERE ${DatabaseConstants.colCreatedAt} >= ?',
+      [dayStartTime],
     );
 
     int maxSeq = 0;
     for (final row in results) {
-      final inv = row[DatabaseConstants.colInvoiceNo] as String?;
-      if (inv != null) {
-        final parts = inv.split('-');
-        if (parts.length >= 3) {
-          final seq = int.tryParse(parts.last);
-          if (seq != null && seq > maxSeq) {
-            maxSeq = seq;
+      final inv = (row[DatabaseConstants.colInvoiceNo] as String?)?.trim();
+      if (inv != null && inv.isNotEmpty) {
+        String numPart = inv;
+        if (prefix.isNotEmpty) {
+          if (inv.startsWith(prefix)) {
+            numPart = inv.substring(prefix.length);
+          } else {
+            continue;
           }
+        } else {
+          // If invoice has a legacy prefix like INV- or RET-, strip or ignore non-digits
+          if (inv.startsWith('INV-')) {
+            final parts = inv.split('-');
+            numPart = parts.last;
+          } else if (inv.contains('-')) {
+            continue;
+          }
+        }
+        final seq = int.tryParse(numPart);
+        if (seq != null && seq > maxSeq) {
+          maxSeq = seq;
         }
       }
     }
 
     int nextSeq = maxSeq + 1;
-    String candidate = '$prefix$datePrefix-${nextSeq.toString().padLeft(4, '0')}';
+    String candidate = '$prefix${nextSeq.toString().padLeft(7, '0')}';
 
+    // 3. Collision guard: Ensure candidate is not already used in current day/session
     while (true) {
       final exists = await _databaseService.query(
         DatabaseConstants.tableSales,
-        where: '${DatabaseConstants.colInvoiceNo} = ?',
-        whereArgs: [candidate],
+        where: '${DatabaseConstants.colInvoiceNo} = ? AND ${DatabaseConstants.colCreatedAt} >= ?',
+        whereArgs: [candidate, dayStartTime],
         limit: 1,
       );
       if (exists.isEmpty) break;
       nextSeq++;
-      candidate = '$prefix$datePrefix-${nextSeq.toString().padLeft(4, '0')}';
+      candidate = '$prefix${nextSeq.toString().padLeft(7, '0')}';
     }
 
     return candidate;

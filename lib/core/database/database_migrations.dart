@@ -52,7 +52,7 @@ class DatabaseMigrations {
     await db.execute('''
       CREATE TABLE ${DatabaseConstants.tableSales} (
         ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
-        ${DatabaseConstants.colInvoiceNo} TEXT NOT NULL UNIQUE,
+        ${DatabaseConstants.colInvoiceNo} TEXT NOT NULL,
         ${DatabaseConstants.colCustomerId} INTEGER,
         ${DatabaseConstants.colCustomerName} TEXT NOT NULL,
         ${DatabaseConstants.colSubtotal} REAL NOT NULL,
@@ -408,6 +408,78 @@ class DatabaseMigrations {
         if (!hasIsSynced) {
           await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colIsSynced} INTEGER NOT NULL DEFAULT 0;');
           await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colSyncedAt} TEXT;');
+        }
+      } catch (_) {}
+
+      // Safe update to remove UNIQUE constraint on sales.invoice_no so daily resetting sequence works without conflict
+      try {
+        final tableMaster = await db.rawQuery(
+          "SELECT sql FROM sqlite_master WHERE type='table' AND name='${DatabaseConstants.tableSales}'"
+        );
+        if (tableMaster.isNotEmpty) {
+          final sql = (tableMaster.first['sql'] as String?) ?? '';
+          if (sql.contains('${DatabaseConstants.colInvoiceNo} TEXT NOT NULL UNIQUE') ||
+              sql.toUpperCase().contains('UNIQUE (${DatabaseConstants.colInvoiceNo.toUpperCase()})') ||
+              (sql.contains(DatabaseConstants.colInvoiceNo) && sql.toUpperCase().contains('UNIQUE'))) {
+            await db.transaction((txn) async {
+              await txn.execute('PRAGMA foreign_keys=OFF;');
+              await txn.execute('''
+                CREATE TABLE IF NOT EXISTS sales_migration_tmp (
+                  ${DatabaseConstants.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+                  ${DatabaseConstants.colInvoiceNo} TEXT NOT NULL,
+                  ${DatabaseConstants.colCustomerId} INTEGER,
+                  ${DatabaseConstants.colCustomerName} TEXT NOT NULL,
+                  ${DatabaseConstants.colSubtotal} REAL NOT NULL,
+                  ${DatabaseConstants.colDiscount} REAL NOT NULL DEFAULT 0.0,
+                  ${DatabaseConstants.colTax} REAL NOT NULL DEFAULT 0.0,
+                  ${DatabaseConstants.colGrandTotal} REAL NOT NULL,
+                  ${DatabaseConstants.colPaidAmount} REAL NOT NULL DEFAULT 0.0,
+                  ${DatabaseConstants.colChangeAmount} REAL NOT NULL DEFAULT 0.0,
+                  ${DatabaseConstants.colPaymentMethod} TEXT NOT NULL DEFAULT 'Cash',
+                  ${DatabaseConstants.colStatus} TEXT NOT NULL DEFAULT 'COMPLETED',
+                  ${DatabaseConstants.colCashierName} TEXT NOT NULL,
+                  ${DatabaseConstants.colCreatedAt} TEXT NOT NULL,
+                  ${DatabaseConstants.colUpdatedAt} TEXT NOT NULL,
+                  ${DatabaseConstants.colIsSynced} INTEGER NOT NULL DEFAULT 0,
+                  ${DatabaseConstants.colSyncedAt} TEXT
+                );
+              ''');
+              final cols = await txn.rawQuery("PRAGMA table_info(${DatabaseConstants.tableSales})");
+              final colNames = cols.map((c) => c['name'] as String).toSet();
+              final fieldsToCopy = [
+                DatabaseConstants.colId,
+                DatabaseConstants.colInvoiceNo,
+                DatabaseConstants.colCustomerId,
+                DatabaseConstants.colCustomerName,
+                DatabaseConstants.colSubtotal,
+                DatabaseConstants.colDiscount,
+                DatabaseConstants.colTax,
+                DatabaseConstants.colGrandTotal,
+                DatabaseConstants.colPaidAmount,
+                DatabaseConstants.colChangeAmount,
+                DatabaseConstants.colPaymentMethod,
+                DatabaseConstants.colStatus,
+                DatabaseConstants.colCashierName,
+                DatabaseConstants.colCreatedAt,
+                DatabaseConstants.colUpdatedAt,
+              ].where((c) => colNames.contains(c)).toList();
+
+              if (colNames.contains(DatabaseConstants.colIsSynced)) {
+                fieldsToCopy.add(DatabaseConstants.colIsSynced);
+              }
+              if (colNames.contains(DatabaseConstants.colSyncedAt)) {
+                fieldsToCopy.add(DatabaseConstants.colSyncedAt);
+              }
+
+              final colListStr = fieldsToCopy.join(', ');
+              await txn.execute('INSERT INTO sales_migration_tmp ($colListStr) SELECT $colListStr FROM ${DatabaseConstants.tableSales};');
+              await txn.execute('DROP TABLE ${DatabaseConstants.tableSales};');
+              await txn.execute('ALTER TABLE sales_migration_tmp RENAME TO ${DatabaseConstants.tableSales};');
+              await txn.execute('CREATE INDEX IF NOT EXISTS idx_sales_invoice ON ${DatabaseConstants.tableSales} (${DatabaseConstants.colInvoiceNo});');
+              await txn.execute('CREATE INDEX IF NOT EXISTS idx_sales_status ON ${DatabaseConstants.tableSales} (${DatabaseConstants.colStatus});');
+              await txn.execute('PRAGMA foreign_keys=ON;');
+            });
+          }
         }
       } catch (_) {}
 

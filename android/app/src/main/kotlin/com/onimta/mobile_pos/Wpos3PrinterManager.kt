@@ -360,7 +360,7 @@ class Wpos3PrinterManager(private val context: Context) {
                         pTwoCols("CUSTOMER:", customerName, 18, false)
                         pLine("--------------------------------", 18, 1, false)
 
-                        pTwoCols("LN  PRODUCT", "PRICE QTY TOTAL", 18, true)
+                        pTwoCols("LN  PRODUCT", String.format("%9s %4s %9s", "PRICE", "QTY", "TOTAL"), 18, true)
                         pLine("--------------------------------", 18, 1, false)
 
                         var lineNum = 1
@@ -368,14 +368,40 @@ class Wpos3PrinterManager(private val context: Context) {
                             val desc = (item["description"] as? String ?: "").uppercase()
                             val qty = item["qty"] as? String ?: "1"
                             val price = item["price"] as? String ?: ""
-                            val itemDisc = item["discount"] as? String ?: ""
+                            val cleanPrice = price.replace("Rs.", "", ignoreCase = true).replace("Rs", "", ignoreCase = true).replace("LKR", "", ignoreCase = true).trim()
                             val total = item["total"] as? String ?: ""
+                            val cleanTotal = total.replace("Rs.", "", ignoreCase = true).replace("Rs", "", ignoreCase = true).replace("LKR", "", ignoreCase = true).trim()
+                            val itemDisc = item["discount"] as? String ?: ""
 
-                            val lnStr = String.format("%2d. ", lineNum)
-                            pLine(lnStr + desc, 19, 0, true)
-                            val priceQtyTotal = String.format("%9s %4s %9s", price, qty, total)
+                            val prefix = String.format("%2d. ", lineNum)
+                            val indent = " ".repeat(prefix.length)
+                            val maxChars = 32 - prefix.length
+                            val words = desc.split(" ")
+                            val lines = mutableListOf<String>()
+                            var cur = StringBuilder()
+                            for (w in words) {
+                                if (w.isEmpty()) continue
+                                if (cur.length + w.length + (if (cur.isNotEmpty()) 1 else 0) <= maxChars) {
+                                    if (cur.isNotEmpty()) cur.append(" ")
+                                    cur.append(w)
+                                } else {
+                                    if (cur.isNotEmpty()) {
+                                        lines.add(cur.toString())
+                                        cur = StringBuilder(w)
+                                    } else {
+                                        lines.add(w)
+                                    }
+                                }
+                            }
+                            if (cur.isNotEmpty()) lines.add(cur.toString())
+                            for (i in lines.indices) {
+                                if (i == 0) pLine(prefix + lines[i], 19, 0, true)
+                                else pLine(indent + lines[i], 19, 0, true)
+                            }
+
+                            val priceQtyTotal = String.format("%9s %4s %9s", cleanPrice, qty, cleanTotal)
                             val pad = (32 - priceQtyTotal.length).coerceAtLeast(0)
-                            pLine(" ".repeat(pad) + priceQtyTotal, 18, 0, false)
+                            pLine(" ".repeat(pad) + priceQtyTotal, 19, 0, true)
                             if (itemDisc.isNotEmpty() && itemDisc != "LKR 0.00" && itemDisc != "0.00") {
                                 pTwoCols("    ITEM DISC:", "-$itemDisc", 16, false)
                             }
@@ -391,7 +417,7 @@ class Wpos3PrinterManager(private val context: Context) {
                             pTwoCols("TAX:", tax, 20, false)
                         }
                         pLine("--------------------------------", 18, 1, false)
-                        pTwoCols("GRAND TOTAL:", grandTotal, 24, true)
+                        pTwoCols("GRAND TOTAL:", grandTotal, 28, true)
                         pLine("--------------------------------", 18, 1, false)
 
                         if (payments.isNotEmpty()) {
@@ -785,7 +811,7 @@ class Wpos3PrinterManager(private val context: Context) {
             drawTwoCols("TAX:", tax, 20f, false)
         }
         drawDivider(false)
-        drawTwoCols("GRAND TOTAL:", grandTotal, 24f, true)
+        drawTwoCols("GRAND TOTAL:", grandTotal, 28f, true)
         drawDivider(false)
 
         if (payments.isNotEmpty()) {
@@ -929,10 +955,10 @@ class Wpos3PrinterManager(private val context: Context) {
         drawCenter(title, 22f, true)
         drawDivider(false)
 
-        drawTwoCols("BUSINESS DAY:", dayNumber, 19f, false)
-        drawTwoCols("SHIFT #:", shiftNumber, 19f, false)
-        drawTwoCols("CASHIER:", cashier, 19f, false)
-        drawTwoCols("DATE & TIME:", dateTime, 17f, false)
+        drawTwoCols("BUSINESS DAY:", dayNumber, 19f, true)
+        drawTwoCols("SHIFT #:", shiftNumber, 19f, true)
+        drawTwoCols("CASHIER:", cashier, 19f, true)
+        drawTwoCols("DATE & TIME:", dateTime, 17f, true)
         drawDivider(true)
 
         drawTwoCols("OPENING BALANCE:", openingBalance, 20f, true)
@@ -954,9 +980,9 @@ class Wpos3PrinterManager(private val context: Context) {
             val actualCash = reportData["actualCash"] as? String ?: ""
             val cashDiff = reportData["cashDiff"] as? String ?: ""
 
-            drawTwoCols("TOTAL INVOICES:", totalInvoices, 19f, false)
-            drawTwoCols("GROSS SALES:", grossSales, 19f, false)
-            if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("DISCOUNT:", "-$discount", 19f, false)
+            drawTwoCols("TOTAL INVOICES:", totalInvoices, 19f, true)
+            drawTwoCols("GROSS SALES:", grossSales, 19f, true)
+            if (discount.isNotEmpty() && discount != "LKR 0.00") drawTwoCols("DISCOUNT:", "-$discount", 19f, true)
             drawDivider(true)
             drawTwoCols("NET SALES:", netSales, 21f, true)
             drawDivider(true)
@@ -965,13 +991,13 @@ class Wpos3PrinterManager(private val context: Context) {
             drawTwoCols("NON-CASH SALES:", nonCashSales, 19f, true)
             if (nonCashBreakdown.isNotEmpty()) {
                 for ((method, amount) in nonCashBreakdown) {
-                    drawTwoCols("  • ${method.uppercase()}:", amount, 17f, false)
+                    drawTwoCols("  • ${method.uppercase()}:", amount, 17f, true)
                 }
             } else if (cardSales.isNotEmpty() && cardSales != "LKR 0.00") {
-                drawTwoCols("  • CARD SALES:", cardSales, 17f, false)
+                drawTwoCols("  • CARD SALES:", cardSales, 17f, true)
             }
-            drawTwoCols("CASH PAID IN (+):", paidIn, 19f, false)
-            drawTwoCols("CASH PAID OUT (-):", paidOut, 19f, false)
+            drawTwoCols("CASH PAID IN (+):", paidIn, 19f, true)
+            drawTwoCols("CASH PAID OUT (-):", paidOut, 19f, true)
             drawDivider(true)
 
             drawTwoCols("EXPECTED CASH:", expectedCash, 20f, true)

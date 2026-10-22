@@ -85,9 +85,9 @@ class PrinterService {
         return {
           'description': item.productDescription.toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(item.quantity),
-          'price': CurrencyFormatter.formatWithSymbol(item.unitPrice),
+          'price': CurrencyFormatter.formatAmount(item.unitPrice),
           'discount': item.discount > 0 ? CurrencyFormatter.formatWithSymbol(item.discount) : '',
-          'total': CurrencyFormatter.formatWithSymbol(item.lineTotal),
+          'total': CurrencyFormatter.formatAmount(item.lineTotal),
         };
       }).toList();
 
@@ -228,8 +228,8 @@ class PrinterService {
         return {
           'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString().toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(qty),
-          'price': CurrencyFormatter.formatWithSymbol(price),
-          'total': CurrencyFormatter.formatWithSymbol(total),
+          'price': CurrencyFormatter.formatAmount(price),
+          'total': CurrencyFormatter.formatAmount(total),
         };
       }).toList();
 
@@ -271,8 +271,8 @@ class PrinterService {
         return {
           'description': (item['description'] ?? item['productDescription'] ?? 'Item').toString().toUpperCase(),
           'qty': CurrencyFormatter.formatQuantity(qty),
-          'price': CurrencyFormatter.formatWithSymbol(price),
-          'total': CurrencyFormatter.formatWithSymbol(total),
+          'price': CurrencyFormatter.formatAmount(price),
+          'total': CurrencyFormatter.formatAmount(total),
         };
       }).toList();
 

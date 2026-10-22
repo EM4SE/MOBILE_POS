@@ -13,7 +13,7 @@ abstract class SalesRepository {
   Future<int> markSaleSynced(int saleId, String syncedAt);
   Future<List<Sale>> getUnsyncedSales();
   Future<int> deleteSale(int saleId);
-  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'});
+  Future<String> generateNextInvoiceNumber({String prefix = ''});
   Future<double> getTodayTotalSales();
   Future<List<ItemWiseSaleReportItem>> getItemWiseSalesReport({String? dateFilter});
   Future<TotalSalesReportData> getTotalSalesReport({String? dateFilter});
@@ -70,7 +70,7 @@ class SalesRepositoryImpl implements SalesRepository {
   }
 
   @override
-  Future<String> generateNextInvoiceNumber({String prefix = 'INV-'}) {
+  Future<String> generateNextInvoiceNumber({String prefix = ''}) {
     return _localDataSource.generateNextInvoiceNumber(prefix: prefix);
   }
 
