@@ -184,6 +184,31 @@ class ShiftServiceImpl implements ShiftService {
       throw StateError('No active shift to close');
     }
 
+    // If Day End is requested, verify with ERP API FIRST
+    // If API call fails or returns error, abort so Day End is NOT performed in POS system
+    Map<String, dynamic>? dayEndApiRes;
+    if (performDayEnd && currentDay != null && _remoteDataSource != null) {
+      final dayStartDate = currentDay.openedAt;
+      try {
+        dayEndApiRes = await _remoteDataSource.sendDayEnd(
+          location: '01',
+          unit: '01',
+          dayStartDate: dayStartDate,
+        );
+      } catch (e) {
+        debugPrint('Day End ERP iid 7 call error: $e');
+        await _syncLogRepository?.logAction(
+          actionType: 'SHIFT_EVENT',
+          title: 'Day End ERP API Failed (Iid 7)',
+          details: 'Day End aborted in POS. Business Day #${currentDay.dayNumber} remains open. Server error: $e',
+          status: 'FAILED',
+          errorMessage: e.toString(),
+        );
+        // Abort: do NOT perform day end or shift end in POS system
+        throw Exception('Day End API failed: $e. Day End was cancelled in POS.');
+      }
+    }
+
     final stats = await _repository.getShiftStats(currentShift);
     final closedShift = await _repository.closeShift(
       shift: currentShift,
@@ -226,32 +251,16 @@ class ShiftServiceImpl implements ShiftService {
         cashierName: user.displayName,
       );
 
-      // Call ERP Day End API (sp_Android_Common_API with @Iid = 7)
-      if (_remoteDataSource != null) {
-        try {
-          final dayStartDate = closedDay.openedAt.isNotEmpty ? closedDay.openedAt : currentDay.openedAt;
-          final res = await _remoteDataSource.sendDayEnd(
-            location: '01',
-            unit: '01',
-            dayStartDate: dayStartDate,
-          );
-          await _syncLogRepository?.logAction(
-            actionType: 'SHIFT_EVENT',
-            title: 'Day End ERP API Synced (Iid 7)',
-            details: 'Business Day #${closedDay.dayNumber} closed | Location: 01 | Unit: 01 | Start Date: $dayStartDate | Cashier: ${user.displayName} | Actual Cash: ${CurrencyFormatter.formatWithSymbol(actualClosingCash)}',
-            status: 'SUCCESS',
-            responseBody: res,
-          );
-        } catch (e) {
-          debugPrint('Day End ERP iid 7 call error: $e');
-          await _syncLogRepository?.logAction(
-            actionType: 'SHIFT_EVENT',
-            title: 'Day End ERP API Failed (Iid 7)',
-            details: 'Business Day #${closedDay.dayNumber} closed locally. Server error: $e',
-            status: 'FAILED',
-            errorMessage: e.toString(),
-          );
-        }
+      // Log successful sync with ERP API
+      if (dayEndApiRes != null) {
+        final dayStartDate = closedDay.openedAt.isNotEmpty ? closedDay.openedAt : currentDay.openedAt;
+        await _syncLogRepository?.logAction(
+          actionType: 'SHIFT_EVENT',
+          title: 'Day End ERP API Synced (Iid 7)',
+          details: 'Business Day #${closedDay.dayNumber} closed | Location: 01 | Unit: 01 | Start Date: $dayStartDate | Cashier: ${user.displayName} | Actual Cash: ${CurrencyFormatter.formatWithSymbol(actualClosingCash)}',
+          status: 'SUCCESS',
+          responseBody: dayEndApiRes,
+        );
       }
 
       // Automatic Receipt Print for Day End
