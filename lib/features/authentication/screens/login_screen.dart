@@ -8,6 +8,10 @@ import '../../../core/services/shift_service.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../core/utils/responsive_helper.dart';
 import '../../../core/widgets/pos_animated_loader.dart';
+import '../../../data/repositories/product_repository.dart';
+import '../../../data/repositories/settings_repository.dart';
+import '../../products/controllers/product_controller.dart';
+import '../../settings/controllers/settings_controller.dart';
 import '../controllers/login_controller.dart';
 import '../widgets/numeric_keypad.dart';
 
@@ -15,11 +19,19 @@ import '../widgets/numeric_keypad.dart';
 class LoginScreen extends StatefulWidget {
   final LoginController controller;
   final ShiftService shiftService;
+  final SettingsController? settingsController;
+  final SettingsRepository? settingsRepository;
+  final ProductRepository? productRepository;
+  final ProductController? productController;
 
   const LoginScreen({
     super.key,
     required this.controller,
     required this.shiftService,
+    this.settingsController,
+    this.settingsRepository,
+    this.productRepository,
+    this.productController,
   });
 
   @override
@@ -29,6 +41,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isProcessing = false;
   String _statusMessage = 'Signing in...';
+  String? _statusSubtitle;
 
   @override
   void initState() {
@@ -36,6 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
     // Preload active session in background so login to POS is instant
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.shiftService.checkActiveSession();
+      if (widget.settingsController != null && widget.settingsController!.settings.isEmpty) {
+        widget.settingsController!.loadSettings();
+      }
     });
   }
 
@@ -46,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _isProcessing = true;
       _statusMessage = 'Authenticating PIN...';
+      _statusSubtitle = null;
     });
 
     try {
@@ -53,8 +70,57 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (user != null) {
+        // Check if "Sync items when login into system" is enabled in settings
+        bool syncItemsOnLogin = false;
+        if (widget.settingsController != null) {
+          if (widget.settingsController!.settings.isEmpty) {
+            try {
+              await widget.settingsController!.loadSettings();
+            } catch (e) {
+              debugPrint('Settings load notice: $e');
+            }
+          }
+          syncItemsOnLogin = widget.settingsController!.syncItemsOnLogin;
+        } else if (widget.settingsRepository != null) {
+          final val = await widget.settingsRepository!.getSetting('sync_items_on_login');
+          syncItemsOnLogin = val == 'true';
+        }
+
+        // If toggle is true, sync items when logging into the system
+        if (syncItemsOnLogin && widget.productRepository != null) {
+          if (mounted) {
+            setState(() {
+              _statusMessage = 'Syncing Items Catalog...';
+              _statusSubtitle = 'Connecting to ERP server...';
+            });
+          }
+
+          try {
+            final count = await widget.productRepository!.syncProductsFromApi(
+              onProgress: (count, status) {
+                if (mounted) {
+                  setState(() {
+                    _statusSubtitle = status;
+                  });
+                }
+              },
+            ).timeout(const Duration(seconds: 30));
+
+            debugPrint('Login: Synced $count products from ERP');
+            if (widget.productController != null) {
+              await widget.productController!.loadProducts(refresh: true);
+            }
+          } catch (e) {
+            debugPrint('Login product sync notice: $e');
+            // Gracefully proceed so offline terminal operation is not blocked
+          }
+        }
+
+        if (!mounted) return;
+
         setState(() {
           _statusMessage = 'Opening Workspace...';
+          _statusSubtitle = null;
         });
 
         try {
@@ -80,12 +146,14 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         setState(() {
           _isProcessing = false;
+          _statusSubtitle = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isProcessing = false;
+          _statusSubtitle = null;
         });
       }
     }
@@ -169,6 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Center(
         child: PosAnimatedLoader(
           title: _statusMessage,
+          subtitle: _statusSubtitle,
           dotColor: AppColors.primary,
         ),
       ),

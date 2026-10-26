@@ -78,6 +78,7 @@ class DatabaseConstants {
   static const String colCustomerName = 'customer_name';
   static const String colSubtotal = 'subtotal';
   static const String colDiscount = 'discount';
+  static const String colIsDiscountPercentage = 'is_discount_percentage';
   static const String colTax = 'tax';
   static const String colGrandTotal = 'grand_total';
   static const String colPaidAmount = 'paid_amount';

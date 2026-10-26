@@ -763,6 +763,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 8),
               const Text('Server Product Catalog:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  title: const Text('Sync Items on Login', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  subtitle: Text(
+                    widget.controller.syncItemsOnLogin
+                        ? 'Items automatically sync from ERP when logging in'
+                        : 'Item sync on login is disabled (faster offline login)',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  value: widget.controller.syncItemsOnLogin,
+                  activeColor: AppColors.primary,
+                  onChanged: (val) async {
+                    await widget.controller.setSyncItemsOnLogin(val);
+                    setDialogState(() {});
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
               Center(
                 child: _isSyncing
                     ? const Row(
@@ -1016,6 +1040,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.storage,
                     iconColor: AppColors.tilePos,
                     onTap: _showDatabaseSettingsDialog,
+                  ),
+
+                  const SizedBox(height: AppDimensions.sm),
+
+                  // Sync Items on Login Tile
+                  SettingsTile(
+                    title: 'Sync Items on Login',
+                    description: widget.controller.syncItemsOnLogin
+                        ? 'Enabled: Items will automatically sync from ERP when logging into system'
+                        : 'Disabled: Items will not sync when logging in (faster offline login)',
+                    icon: Icons.sync,
+                    iconColor: widget.controller.syncItemsOnLogin ? const Color(0xFF0284C7) : AppColors.textSecondary,
+                    trailing: Switch(
+                      value: widget.controller.syncItemsOnLogin,
+                      activeColor: AppColors.primary,
+                      onChanged: (val) async {
+                        await widget.controller.setSyncItemsOnLogin(val);
+                      },
+                    ),
+                    onTap: () async {
+                      await widget.controller.setSyncItemsOnLogin(!widget.controller.syncItemsOnLogin);
+                    },
                   ),
 
                   const SizedBox(height: AppDimensions.sm),

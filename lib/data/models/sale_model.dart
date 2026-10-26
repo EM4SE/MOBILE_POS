@@ -21,6 +21,7 @@ class Sale {
   final bool isSynced;
   final String? syncedAt;
   final List<SaleItem> items;
+  final bool isDiscountPercentage;
 
   const Sale({
     this.id,
@@ -41,6 +42,7 @@ class Sale {
     this.isSynced = false,
     this.syncedAt,
     this.items = const [],
+    this.isDiscountPercentage = false,
   });
 
   Sale copyWith({
@@ -62,6 +64,7 @@ class Sale {
     bool? isSynced,
     String? syncedAt,
     List<SaleItem>? items,
+    bool? isDiscountPercentage,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -82,6 +85,7 @@ class Sale {
       isSynced: isSynced ?? this.isSynced,
       syncedAt: syncedAt ?? this.syncedAt,
       items: items ?? this.items,
+      isDiscountPercentage: isDiscountPercentage ?? this.isDiscountPercentage,
     );
   }
 
@@ -92,6 +96,7 @@ class Sale {
       DatabaseConstants.colCustomerName: customerName,
       DatabaseConstants.colSubtotal: subtotal,
       DatabaseConstants.colDiscount: discount,
+      DatabaseConstants.colIsDiscountPercentage: isDiscountPercentage ? 1 : 0,
       DatabaseConstants.colTax: tax,
       DatabaseConstants.colGrandTotal: grandTotal,
       DatabaseConstants.colPaidAmount: paidAmount,
@@ -130,6 +135,8 @@ class Sale {
       isSynced: (map[DatabaseConstants.colIsSynced] as int? ?? 0) == 1,
       syncedAt: map[DatabaseConstants.colSyncedAt] as String?,
       items: items,
+      isDiscountPercentage: (map[DatabaseConstants.colIsDiscountPercentage] == 1 ||
+          map[DatabaseConstants.colIsDiscountPercentage] == true),
     );
   }
 }

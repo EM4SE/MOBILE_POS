@@ -13,6 +13,7 @@ abstract class BillSyncRepository {
     String? customerCode,
     String? customerPhone,
     String? salesman,
+    bool? isDiscountPercentage,
   });
 
   Future<Map<String, dynamic>> syncSale(
@@ -22,6 +23,7 @@ abstract class BillSyncRepository {
     String? customerPhone,
     String? salesman,
     String? baseUrl,
+    bool? isDiscountPercentage,
   });
 
   Future<Map<String, dynamic>> syncPendingSales({String? baseUrl});
@@ -49,6 +51,7 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
     String? customerCode,
     String? customerPhone,
     String? salesman,
+    bool? isDiscountPercentage,
   }) {
     // 1. Build line items array
     final transDt = sale.items.map((item) {
@@ -70,17 +73,53 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
 
     // 2. Build payment lines array
     final transPay = <Map<String, dynamic>>[];
+    int payId = 1;
 
-    // First line is always SUB TOTAL
-    transPay.add({
-      'id': 1,
-      'payMode': 'SUB TOTAL',
-      'cardType': 'SUB TOTAL',
-      'cardRef': '',
-      'amount': sale.grandTotal,
-    });
+    final bool hasDiscount = sale.discount > 0;
+    final bool isPercentage = isDiscountPercentage ?? sale.isDiscountPercentage;
 
-    int payId = 2;
+    if (hasDiscount) {
+      // 1. Initial SUB TOTAL before discount
+      transPay.add({
+        'id': payId++,
+        'PayMode': 'SUB TOTAL',
+        'payMode': 'SUB TOTAL',
+        'cardType': 'SUB TOTAL',
+        'cardRef': '',
+        'amount': sale.subtotal,
+      });
+
+      // 2. DISCOUNT line with hardcoded cardType
+      transPay.add({
+        'id': payId++,
+        'PayMode': 'DISCOUNT',
+        'payMode': 'DISCOUNT',
+        'cardType': isPercentage ? 'MANUAL DISCOUNT %' : 'MANUAL DISCOUNT AMT',
+        'cardRef': '',
+        'amount': sale.discount,
+      });
+
+      // 3. SUB TOTAL after discount
+      transPay.add({
+        'id': payId++,
+        'PayMode': 'SUB TOTAL',
+        'payMode': 'SUB TOTAL',
+        'cardType': 'SUB TOTAL',
+        'cardRef': '',
+        'amount': sale.grandTotal,
+      });
+    } else {
+      // Initial SUB TOTAL without discount
+      transPay.add({
+        'id': payId++,
+        'PayMode': 'SUB TOTAL',
+        'payMode': 'SUB TOTAL',
+        'cardType': 'SUB TOTAL',
+        'cardRef': '',
+        'amount': sale.grandTotal,
+      });
+    }
+
     final breakdown = PaymentBreakdownHelper.parse(sale.paymentMethod, sale.paidAmount);
 
     if (breakdown.isNotEmpty) {
@@ -88,6 +127,7 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
         final mode = item.method.toUpperCase();
         transPay.add({
           'id': payId++,
+          'PayMode': mode,
           'payMode': mode,
           'cardType': mode,
           'cardRef': item.cardRef ?? '',
@@ -98,6 +138,7 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
       final singleMode = (sale.paymentMethod.isNotEmpty ? sale.paymentMethod : 'CASH').toUpperCase();
       transPay.add({
         'id': payId++,
+        'PayMode': singleMode,
         'payMode': singleMode,
         'cardType': singleMode,
         'cardRef': '',
@@ -109,12 +150,23 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
     if (sale.changeAmount > 0) {
       transPay.add({
         'id': payId++,
+        'PayMode': 'BALANCE',
         'payMode': 'BALANCE',
         'cardType': 'BALANCE',
         'cardRef': '',
         'amount': sale.changeAmount,
       });
     }
+
+    // Closing SUB TOTAL 0 line
+    transPay.add({
+      'id': payId++,
+      'PayMode': 'SUB TOTAL',
+      'payMode': 'SUB TOTAL',
+      'cardType': 'SUB TOTAL',
+      'cardRef': '',
+      'amount': 0,
+    });
 
     return {
       'loca': (locationCode != null && locationCode.isNotEmpty) ? locationCode : '01',
@@ -140,6 +192,7 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
     String? customerPhone,
     String? salesman,
     String? baseUrl,
+    bool? isDiscountPercentage,
   }) async {
     final payload = buildBillPayload(
       sale,
@@ -147,6 +200,7 @@ class BillSyncRepositoryImpl implements BillSyncRepository {
       customerCode: customerCode,
       customerPhone: customerPhone,
       salesman: salesman,
+      isDiscountPercentage: isDiscountPercentage,
     );
 
     try {

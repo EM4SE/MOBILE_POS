@@ -57,6 +57,7 @@ class DatabaseMigrations {
         ${DatabaseConstants.colCustomerName} TEXT NOT NULL,
         ${DatabaseConstants.colSubtotal} REAL NOT NULL,
         ${DatabaseConstants.colDiscount} REAL NOT NULL DEFAULT 0.0,
+        ${DatabaseConstants.colIsDiscountPercentage} INTEGER NOT NULL DEFAULT 0,
         ${DatabaseConstants.colTax} REAL NOT NULL DEFAULT 0.0,
         ${DatabaseConstants.colGrandTotal} REAL NOT NULL,
         ${DatabaseConstants.colPaidAmount} REAL NOT NULL DEFAULT 0.0,
@@ -241,6 +242,7 @@ class DatabaseMigrations {
       'printer_type': 'Thermal 80mm',
       'printer_ip': '192.168.1.100',
       'invoice_prefix': 'INV-',
+      'sync_items_on_login': 'false',
     };
 
     for (final entry in defaultSettings.entries) {
@@ -408,6 +410,10 @@ class DatabaseMigrations {
         if (!hasIsSynced) {
           await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colIsSynced} INTEGER NOT NULL DEFAULT 0;');
           await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colSyncedAt} TEXT;');
+        }
+        final hasIsDiscountPct = salesCols.any((col) => col['name'] == DatabaseConstants.colIsDiscountPercentage);
+        if (!hasIsDiscountPct) {
+          await db.execute('ALTER TABLE ${DatabaseConstants.tableSales} ADD COLUMN ${DatabaseConstants.colIsDiscountPercentage} INTEGER NOT NULL DEFAULT 0;');
         }
       } catch (_) {}
 

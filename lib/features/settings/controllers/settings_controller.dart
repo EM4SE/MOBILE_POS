@@ -34,6 +34,12 @@ class SettingsController extends ChangeNotifier {
       _settings['api_base_url']?.trim().isNotEmpty == true &&
       _settings['api_base_url']!.trim() != ApiService.defaultBaseUrl;
 
+  bool get syncItemsOnLogin => _settings['sync_items_on_login'] == 'true';
+
+  Future<bool> setSyncItemsOnLogin(bool enabled) async {
+    return updateSetting('sync_items_on_login', enabled ? 'true' : 'false');
+  }
+
   String get selectedDeviceDisplayName {
     switch (selectedDevice) {
       case 'DBL_Z93':

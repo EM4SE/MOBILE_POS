@@ -706,6 +706,7 @@ class PosController extends ChangeNotifier {
         customerName: _selectedCustomer?.name ?? 'Walk-in Customer',
         subtotal: subtotal,
         discount: _discountAmount,
+        isDiscountPercentage: _isDiscountPercentage,
         tax: taxAmount,
         grandTotal: grandTotal,
         paidAmount: paidAmount,
@@ -725,6 +726,7 @@ class PosController extends ChangeNotifier {
           userName: authService.currentUser.value?.username ?? 'ONIMTA',
           customerCode: _selectedCustomer?.id?.toString() ?? '',
           customerPhone: _selectedCustomer?.phone ?? '',
+          isDiscountPercentage: _isDiscountPercentage,
         ).catchError((err) {
           debugPrint('ERP bill sync error: $err');
           return <String, dynamic>{'success': false, 'error': err.toString()};
