@@ -4,6 +4,7 @@ import '../../core/services/shift_service.dart';
 import '../../data/models/customer_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/sale_model.dart';
+import '../../data/models/user_model.dart';
 import '../../data/repositories/bill_sync_repository.dart';
 import '../../data/repositories/product_repository.dart';
 import '../../data/repositories/sales_repository.dart';
@@ -101,6 +102,7 @@ class RouteGenerator {
             settingsRepository: settingsRepository,
             productRepository: productRepository,
             productController: productController,
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -121,6 +123,7 @@ class RouteGenerator {
           EndShiftScreen(
             shiftService: shiftService,
             authService: authService,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
           ),
           settings,
         );
@@ -142,13 +145,16 @@ class RouteGenerator {
             productRepository: productRepository,
             productController: productController,
             permissionsService: cashierPermissionsService,
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
 
       case AppRoutes.reports:
         return _buildRoute(
-          const ReportsMenuScreen(),
+          ReportsMenuScreen(
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+          ),
           settings,
         );
 
@@ -157,6 +163,8 @@ class RouteGenerator {
           ItemWiseSalesScreen(
             salesRepository: salesRepository,
             authService: authService,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -166,6 +174,8 @@ class RouteGenerator {
           TotalSalesScreen(
             salesRepository: salesRepository,
             authService: authService,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -176,6 +186,8 @@ class RouteGenerator {
             shiftRepository: shiftRepository,
             shiftService: shiftService,
             authService: authService,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -186,6 +198,8 @@ class RouteGenerator {
             shiftRepository: shiftRepository,
             shiftService: shiftService,
             authService: authService,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -201,6 +215,7 @@ class RouteGenerator {
             posController: posController,
             isSelectionMode: isSelectionMode,
             onProductSelected: onSelected,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
           ),
           settings,
         );
@@ -226,6 +241,7 @@ class RouteGenerator {
             posController: posController,
             isSelectionMode: isSelectionMode,
             onCustomerSelected: onSelected,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
           ),
           settings,
         );
@@ -246,6 +262,8 @@ class RouteGenerator {
             controller: settingsController,
             authService: authService,
             productRepository: productRepository,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -274,36 +292,52 @@ class RouteGenerator {
 
       case AppRoutes.heldBills:
         return _buildRoute(
-          HeldBillsScreen(posController: posController),
+          HeldBillsScreen(
+            posController: posController,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+          ),
           settings,
         );
 
       case AppRoutes.cashMovement:
-        final isPaidIn = (settings.arguments as bool?) ?? true;
+        final args = settings.arguments;
+        final isPaidIn = args is bool
+            ? args
+            : (args is Map<String, dynamic> ? (args['isPaidIn'] as bool? ?? true) : true);
         return _buildRoute(
           CashMovementScreen(
             isPaidIn: isPaidIn,
             shiftService: shiftService,
             authService: authService,
+            authorizedBy: _extractAuthorizedBy(args),
           ),
           settings,
         );
 
       case AppRoutes.discount:
         return _buildRoute(
-          DiscountScreen(posController: posController),
+          DiscountScreen(
+            posController: posController,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+          ),
           settings,
         );
 
       case AppRoutes.exchange:
         return _buildRoute(
-          ExchangeScreen(controller: posController),
+          ExchangeScreen(
+            controller: posController,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+          ),
           settings,
         );
 
       case AppRoutes.returnItem:
         return _buildRoute(
-          ReturnScreen(controller: posController),
+          ReturnScreen(
+            controller: posController,
+            authorizedBy: _extractAuthorizedBy(settings.arguments),
+          ),
           settings,
         );
 
@@ -327,6 +361,7 @@ class RouteGenerator {
             authService: authService,
             userRepository: userRepository!,
             permissionsService: cashierPermissionsService!,
+            syncLogRepository: syncLogRepository,
           ),
           settings,
         );
@@ -334,6 +369,15 @@ class RouteGenerator {
       default:
         return _errorRoute(settings.name);
     }
+  }
+
+  User? _extractAuthorizedBy(Object? args) {
+    if (args is User) return args;
+    if (args is Map<String, dynamic>) {
+      final candidate = args['authorizedBy'];
+      if (candidate is User) return candidate;
+    }
+    return null;
   }
 
   PageRouteBuilder _buildRoute(Widget screen, RouteSettings settings) {

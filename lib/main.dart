@@ -105,7 +105,10 @@ void main() async {
   }
 
   // 4. Core Authentication & Shift Services
-  final AuthenticationService authService = AuthenticationServiceImpl(userRepository);
+  final AuthenticationService authService = AuthenticationServiceImpl(
+    userRepository,
+    syncLogRepository,
+  );
   final ShiftService shiftService = ShiftServiceImpl(
     shiftRepository,
     shiftRemoteDataSource,
@@ -125,8 +128,16 @@ void main() async {
     billSyncRepository: billSyncRepository,
     syncLogRepository: syncLogRepository,
   );
-  final ProductController productController = ProductController(productRepository);
-  final CustomerController customerController = CustomerController(customerRepository);
+  final ProductController productController = ProductController(
+    productRepository,
+    syncLogRepository,
+    authService,
+  );
+  final CustomerController customerController = CustomerController(
+    customerRepository,
+    syncLogRepository,
+    authService,
+  );
   final SettingsController settingsController = SettingsController(settingsRepository);
   final CashierPermissionsService cashierPermissionsService = CashierPermissionsService(settingsRepository);
 

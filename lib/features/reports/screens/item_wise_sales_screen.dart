@@ -6,18 +6,24 @@ import '../../../core/services/printer_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/reports_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/sales_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
 
 class ItemWiseSalesScreen extends StatefulWidget {
   final SalesRepository salesRepository;
   final AuthenticationService authService;
+  final User? authorizedBy;
+  final SyncLogRepository? syncLogRepository;
 
   const ItemWiseSalesScreen({
     super.key,
     required this.salesRepository,
     required this.authService,
+    this.authorizedBy,
+    this.syncLogRepository,
   });
 
   @override
@@ -68,7 +74,7 @@ class _ItemWiseSalesScreenState extends State<ItemWiseSalesScreen> {
     setState(() => _isPrinting = true);
 
     try {
-      final cashier = widget.authService.currentUser.value?.displayName ?? 'Admin';
+      final cashier = (widget.authorizedBy ?? widget.authService.currentUser.value)?.displayName ?? 'Admin';
       final payloadItems = _items.map((i) => i.toMap()).toList();
 
       final result = await PrinterService.printItemWiseSalesReport(
@@ -84,6 +90,16 @@ class _ItemWiseSalesScreenState extends State<ItemWiseSalesScreen> {
       setState(() => _isPrinting = false);
 
       if (result.success) {
+        try {
+          await widget.syncLogRepository?.logAction(
+            actionType: 'POS_ACTION',
+            title: 'Item-Wise Sales Report Printed',
+            details:
+                'Cashier: $cashier | Period: $_selectedPeriod | Items: ${_items.length} | Revenue: ${CurrencyFormatter.formatWithSymbol(_totalRevenue)}',
+            status: 'SUCCESS',
+          );
+        } catch (_) {}
+        if (!mounted) return;
         AppDialog.showSnackBar(context, 'Item Wise Sales Report printed successfully.');
       } else {
         AppDialog.showSnackBar(context, 'Print failed: ${result.errorMessage}', isError: true);

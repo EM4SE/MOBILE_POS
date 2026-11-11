@@ -4,17 +4,21 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../data/models/user_model.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../controllers/pos_controller.dart';
 
 /// Clean, Responsive Full Dedicated Screen for Item Returns & Refunds (No Credit)
 class ReturnScreen extends StatefulWidget {
   final PosController controller;
+  final User? authorizedBy;
 
   const ReturnScreen({
     super.key,
     required this.controller,
+    this.authorizedBy,
   });
 
   @override
@@ -61,6 +65,7 @@ class _ReturnScreenState extends State<ReturnScreen> {
       final sale = await widget.controller.processReturn(
         paymentMethod: _selectedMethod,
         reason: reason,
+        overrideCashier: widget.authorizedBy,
       );
       if (!mounted) return;
       AppDialog.showSnackBar(
@@ -97,6 +102,11 @@ class _ReturnScreenState extends State<ReturnScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.authorizedBy != null)
+                      AuthorizedByBanner(
+                        user: widget.authorizedBy!,
+                        margin: const EdgeInsets.only(bottom: 8),
+                      ),
                     // Customer banner if assigned
                     if (customer != null) ...[
                       Container(

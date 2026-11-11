@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../data/models/user_model.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 
 /// 2x2 Square Grid Action Menu for POS Reports (Identical styling to More Menu)
 class ReportsMenuScreen extends StatelessWidget {
-  const ReportsMenuScreen({super.key});
+  final User? authorizedBy;
+
+  const ReportsMenuScreen({
+    super.key,
+    this.authorizedBy,
+  });
 
   Widget _buildSquareTile({
     required BuildContext context,
@@ -73,50 +80,73 @@ class ReportsMenuScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12.0),
-          child: GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.1,
+          child: Column(
             children: [
-              // 1. ITEM WISE SALE
-              _buildSquareTile(
-                context: context,
-                label: 'ITEM WISE SALE',
-                description: 'Sales quantity & revenue per product item',
-                icon: Icons.inventory_2_outlined,
-                color: const Color(0xFF0891B2), // Cyan/Teal
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.reportItemWise),
-              ),
+              if (authorizedBy != null)
+                AuthorizedByBanner(
+                  user: authorizedBy!,
+                  margin: const EdgeInsets.only(bottom: 10),
+                ),
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1.1,
+                  children: [
+                    // 1. ITEM WISE SALE
+                    _buildSquareTile(
+                      context: context,
+                      label: 'ITEM WISE SALE',
+                      description: 'Sales quantity & revenue per product item',
+                      icon: Icons.inventory_2_outlined,
+                      color: const Color(0xFF0891B2), // Cyan/Teal
+                      onTap: () => Navigator.of(context).pushNamed(
+                        AppRoutes.reportItemWise,
+                        arguments: authorizedBy,
+                      ),
+                    ),
 
-              // 2. TOTAL SALE
-              _buildSquareTile(
-                context: context,
-                label: 'TOTAL SALE',
-                description: 'Overall sales, discounts, returns & payment breakdown',
-                icon: Icons.assessment_outlined,
-                color: const Color(0xFF0D6EFD), // POS Blue
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.reportTotalSales),
-              ),
+                    // 2. TOTAL SALE
+                    _buildSquareTile(
+                      context: context,
+                      label: 'TOTAL SALE',
+                      description: 'Overall sales, discounts, returns & payment breakdown',
+                      icon: Icons.assessment_outlined,
+                      color: const Color(0xFF0D6EFD), // POS Blue
+                      onTap: () => Navigator.of(context).pushNamed(
+                        AppRoutes.reportTotalSales,
+                        arguments: authorizedBy,
+                      ),
+                    ),
 
-              // 3. Z READING (Day End Summary)
-              _buildSquareTile(
-                context: context,
-                label: 'Z READING',
-                description: 'Full Day End financial & drawer reconciliation',
-                icon: Icons.receipt_long,
-                color: const Color(0xFFDC3545), // Danger Red
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.reportZReading),
-              ),
+                    // 3. Z READING (Day End Summary)
+                    _buildSquareTile(
+                      context: context,
+                      label: 'Z READING',
+                      description: 'Full Day End financial & drawer reconciliation',
+                      icon: Icons.receipt_long,
+                      color: const Color(0xFFDC3545), // Danger Red
+                      onTap: () => Navigator.of(context).pushNamed(
+                        AppRoutes.reportZReading,
+                        arguments: authorizedBy,
+                      ),
+                    ),
 
-              // 4. X READING (Current Shift Summary)
-              _buildSquareTile(
-                context: context,
-                label: 'X READING',
-                description: 'Live mid-shift sales & drawer audit',
-                icon: Icons.summarize_outlined,
-                color: const Color(0xFFD97706), // Warm Amber
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.reportXReading),
+                    // 4. X READING (Current Shift Summary)
+                    _buildSquareTile(
+                      context: context,
+                      label: 'X READING',
+                      description: 'Live mid-shift sales & drawer audit',
+                      icon: Icons.summarize_outlined,
+                      color: const Color(0xFFD97706), // Warm Amber
+                      onTap: () => Navigator.of(context).pushNamed(
+                        AppRoutes.reportXReading,
+                        arguments: authorizedBy,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

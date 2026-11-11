@@ -10,6 +10,7 @@ import '../../../data/models/payment_type_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/models/sale_item_model.dart';
 import '../../../data/models/sale_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/bill_sync_repository.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../../data/repositories/exchange_repository.dart';
@@ -229,6 +230,34 @@ class PosController extends ChangeNotifier {
     }
   }
 
+  // --- Audit Logging Helper ---
+
+  String _activeCashierName([User? overrideCashier]) {
+    return (overrideCashier ?? authService.currentUser.value)?.displayName ?? 'Admin';
+  }
+
+  void _logPosAction(
+    String title,
+    String details, {
+    String actionType = 'POS_ACTION',
+    String status = 'SUCCESS',
+  }) {
+    final repo = syncLogRepository;
+    if (repo == null) return;
+    Future<void>(() async {
+      try {
+        await repo.logAction(
+          actionType: actionType,
+          title: title,
+          details: details,
+          status: status,
+        );
+      } catch (e) {
+        debugPrint('POS audit log error: $e');
+      }
+    });
+  }
+
   // --- Cart Actions ---
 
   void addProductToCart(Product product, [double quantity = 1.0]) {
@@ -264,6 +293,10 @@ class PosController extends ChangeNotifier {
     _errorMessage = null;
     _recalculateDiscounts();
     saveDraftCart();
+    _logPosAction(
+      'Item Added to Cart',
+      'Cashier: ${_activeCashierName()} | Product: ${product.description} (${product.code}) | Qty: $quantity | Price: ${product.price.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -297,6 +330,10 @@ class PosController extends ChangeNotifier {
     _errorMessage = null;
     _recalculateDiscounts();
     saveDraftCart();
+    _logPosAction(
+      'Custom Item Added to Cart',
+      'Cashier: ${_activeCashierName()} | Item: ${description.trim()} ($code) | Qty: $quantity | Price: ${price.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -320,6 +357,10 @@ class PosController extends ChangeNotifier {
     );
     _recalculateDiscounts();
     saveDraftCart();
+    _logPosAction(
+      'Item Quantity Updated',
+      'Cashier: ${_activeCashierName()} | Item: ${item.productDescription} | Qty: ${item.quantity} -> $newQuantity',
+    );
     notifyListeners();
   }
 
@@ -341,6 +382,10 @@ class PosController extends ChangeNotifier {
     );
     _recalculateDiscounts();
     saveDraftCart();
+    _logPosAction(
+      'Item Price Updated',
+      'Cashier: ${_activeCashierName()} | Item: ${item.productDescription} | Price: ${item.unitPrice.toStringAsFixed(2)} -> ${newPrice.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -355,6 +400,10 @@ class PosController extends ChangeNotifier {
     );
     _recalculateDiscounts();
     saveDraftCart();
+    _logPosAction(
+      validDisc > 0 ? 'Item Discount Applied' : 'Item Discount Removed',
+      'Cashier: ${_activeCashierName()} | Item: ${item.productDescription} | Discount: ${validDisc.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -367,17 +416,25 @@ class PosController extends ChangeNotifier {
       productDescription: newDescription.trim(),
     );
     saveDraftCart();
+    _logPosAction(
+      'Item Description Updated',
+      'Cashier: ${_activeCashierName()} | "${item.productDescription}" -> "${newDescription.trim()}"',
+    );
     notifyListeners();
   }
 
   void removeItem(int index) {
     if (index >= 0 && index < _cartItems.length) {
-      _cartItems.removeAt(index);
+      final removed = _cartItems.removeAt(index);
       if (_editingIndex == index) {
         _editingIndex = null;
       }
       _recalculateDiscounts();
       saveDraftCart();
+      _logPosAction(
+        'Item Removed from Cart',
+        'Cashier: ${_activeCashierName()} | Item: ${removed.productDescription} | Qty: ${removed.quantity} | Line Total: ${removed.lineTotal.toStringAsFixed(2)}',
+      );
       notifyListeners();
     }
   }
@@ -387,7 +444,12 @@ class PosController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDiscount(double discount, {bool isPercentage = false, double? percentage}) {
+  void setDiscount(
+    double discount, {
+    bool isPercentage = false,
+    double? percentage,
+    User? overrideCashier,
+  }) {
     _isDiscountPercentage = isPercentage;
     _discountPercentage = percentage;
     if (isPercentage && percentage != null && percentage > 0) {
@@ -396,6 +458,14 @@ class PosController extends ChangeNotifier {
       _discountAmount = discount.clamp(0.0, subtotal);
     }
     saveDraftCart();
+    final primaryCashier = authService.currentUser.value?.displayName ?? 'Admin';
+    final authNote = overrideCashier != null
+        ? ' | Authorized by: ${overrideCashier.displayName}'
+        : '';
+    _logPosAction(
+      _discountAmount > 0 ? 'Bill Discount Applied' : 'Bill Discount Removed',
+      'Cashier: $primaryCashier$authNote | Mode: ${isPercentage ? "Percentage (${percentage ?? 0}%)" : "Fixed"} | Discount: ${_discountAmount.toStringAsFixed(2)} | New Total: ${grandTotal.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -408,10 +478,20 @@ class PosController extends ChangeNotifier {
   void selectCustomer(Customer? customer) {
     _selectedCustomer = customer;
     saveDraftCart();
+    _logPosAction(
+      customer != null ? 'Customer Assigned to Bill' : 'Customer Set to Walk-in',
+      'Cashier: ${_activeCashierName()} | Customer: ${customer != null ? "${customer.name}${customer.phone.isNotEmpty ? " (${customer.phone})" : ""}" : "Walk-in Customer"}',
+    );
     notifyListeners();
   }
 
-  void clearCart() {
+  void clearCart({
+    bool logVoid = false,
+    User? overrideCashier,
+    String? reason,
+  }) {
+    final prevCount = _cartItems.length;
+    final prevTotal = grandTotal;
     _cartItems.clear();
     _selectedCustomer = null;
     _discountAmount = 0.0;
@@ -421,6 +501,16 @@ class PosController extends ChangeNotifier {
     _editingIndex = null;
     _errorMessage = null;
     saveDraftCart();
+    if (logVoid && prevCount > 0) {
+      final primaryCashier = authService.currentUser.value?.displayName ?? 'Admin';
+      final authNote = overrideCashier != null
+          ? ' | Authorized by: ${overrideCashier.displayName}'
+          : '';
+      _logPosAction(
+        reason ?? 'Bill Voided ($prevCount items)',
+        'Cashier: $primaryCashier$authNote | Voided Total: ${prevTotal.toStringAsFixed(2)}',
+      );
+    }
     notifyListeners();
   }
 
@@ -447,18 +537,29 @@ class PosController extends ChangeNotifier {
 
     _appliedExchangeVoucher = voucher;
     FeedbackHelper.playScanFeedback();
+    _logPosAction(
+      'Exchange Voucher Applied: $clean',
+      'Cashier: ${_activeCashierName()} | Credit: ${voucher.remainingAmount.toStringAsFixed(2)}',
+    );
     notifyListeners();
     return true;
   }
 
   void removeAppliedExchangeVoucher() {
+    final removed = _appliedExchangeVoucher;
     _appliedExchangeVoucher = null;
+    if (removed != null) {
+      _logPosAction(
+        'Exchange Voucher Removed: ${removed.voucherCode}',
+        'Cashier: ${_activeCashierName()}',
+      );
+    }
     notifyListeners();
   }
 
   // --- Process Exchange Voucher Issuance ---
 
-  Future<ExchangeVoucher> processExchange() async {
+  Future<ExchangeVoucher> processExchange({User? overrideCashier}) async {
     if (_cartItems.isEmpty) {
       throw const PosOperationException('Cannot create exchange with an empty cart');
     }
@@ -473,7 +574,7 @@ class PosController extends ChangeNotifier {
     try {
       final voucherCode = await exchangeRepository!.generateNextVoucherCode();
       final exchangeTotal = (subtotal - _discountAmount).clamp(0.0, double.infinity);
-      final cashier = authService.currentUser.value?.displayName ?? 'Admin';
+      final cashier = (overrideCashier ?? authService.currentUser.value)?.displayName ?? 'Admin';
       final now = DateTime.now().toIso8601String();
 
       final itemsPayload = _cartItems.map((i) => {
@@ -496,6 +597,11 @@ class PosController extends ChangeNotifier {
       );
 
       await exchangeRepository!.insertVoucher(voucher);
+
+      _logPosAction(
+        'Exchange Voucher Issued: $voucherCode',
+        'Cashier: $cashier | Customer: ${voucher.customerName} | Items: ${_cartItems.length} | Total: ${exchangeTotal.toStringAsFixed(2)}',
+      );
 
       // Print Exchange Voucher Receipt with Barcode
       await PrinterService.printExchangeReceipt(
@@ -524,6 +630,7 @@ class PosController extends ChangeNotifier {
   Future<Sale> processReturn({
     required String paymentMethod,
     String? reason,
+    User? overrideCashier,
   }) async {
     if (_cartItems.isEmpty) {
       throw const PosOperationException('Cannot return an empty cart');
@@ -539,7 +646,7 @@ class PosController extends ChangeNotifier {
     try {
       final returnInvoiceNo = await salesRepository.generateNextInvoiceNumber(prefix: 'RET-');
       final returnTotal = (subtotal - _discountAmount).clamp(0.0, double.infinity);
-      final cashier = authService.currentUser.value?.displayName ?? 'Admin';
+      final cashier = (overrideCashier ?? authService.currentUser.value)?.displayName ?? 'Admin';
       final now = DateTime.now().toIso8601String();
 
       final returnSale = Sale(
@@ -560,6 +667,11 @@ class PosController extends ChangeNotifier {
 
       final saleId = await salesRepository.insertSaleWithItems(returnSale, _cartItems);
       final completedReturn = returnSale.copyWith(id: saleId, items: List.from(_cartItems));
+
+      _logPosAction(
+        'Return Processed: $returnInvoiceNo',
+        'Cashier: $cashier | Method: $paymentMethod | Reason: ${reason ?? "Customer Return"} | Items: ${_cartItems.length} | Refund: ${returnTotal.toStringAsFixed(2)}',
+      );
 
       final itemsPayload = _cartItems.map((i) => {
         'description': i.productDescription,
@@ -594,13 +706,16 @@ class PosController extends ChangeNotifier {
 
   // --- Hold and Resume Bills ---
 
-  Future<Sale> holdCurrentBill({bool printReceipt = true}) async {
+  Future<Sale> holdCurrentBill({
+    bool printReceipt = true,
+    User? overrideCashier,
+  }) async {
     if (_cartItems.isEmpty) {
       throw const PosOperationException('Cannot hold an empty bill');
     }
 
     final invoiceNo = await salesRepository.generateNextInvoiceNumber();
-    final cashierName = authService.currentUser.value?.displayName ?? 'Admin';
+    final cashierName = (overrideCashier ?? authService.currentUser.value)?.displayName ?? 'Admin';
     final customerName = _selectedCustomer?.name ?? 'Walk-in Customer';
 
     final heldSale = Sale(
@@ -625,6 +740,11 @@ class PosController extends ChangeNotifier {
 
     _heldBills.insert(0, savedHeldSale);
     clearCart();
+
+    _logPosAction(
+      'Bill Held: $invoiceNo',
+      'Cashier: $cashierName | Customer: $customerName | Items: $totalLines | Qty: $totalQty | Total: ${totalAmount.toStringAsFixed(2)}',
+    );
 
     if (printReceipt) {
       try {
@@ -658,6 +778,11 @@ class PosController extends ChangeNotifier {
     if (heldSale.id != null) {
       await salesRepository.deleteSale(heldSale.id!);
     }
+    saveDraftCart();
+    _logPosAction(
+      'Held Bill Recalled: ${heldSale.invoiceNo}',
+      'Cashier: ${_activeCashierName()} | Items: ${heldSale.items.length} | Total: ${heldSale.grandTotal.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -666,6 +791,10 @@ class PosController extends ChangeNotifier {
     if (heldSale.id != null) {
       await salesRepository.deleteSale(heldSale.id!);
     }
+    _logPosAction(
+      'Held Bill Discarded: ${heldSale.invoiceNo}',
+      'Cashier: ${_activeCashierName()} | Total: ${heldSale.grandTotal.toStringAsFixed(2)}',
+    );
     notifyListeners();
   }
 
@@ -718,6 +847,11 @@ class PosController extends ChangeNotifier {
 
       final saleId = await salesRepository.insertSaleWithItems(sale, _cartItems);
       final completedSale = sale.copyWith(id: saleId, items: List.from(_cartItems));
+
+      _logPosAction(
+        'Sale Completed: $invoiceNo',
+        'Cashier: ${sale.cashierName} | Customer: ${sale.customerName} | Items: ${completedSale.items.length} | Subtotal: ${sale.subtotal.toStringAsFixed(2)} | Discount: ${sale.discount.toStringAsFixed(2)} | Total: ${sale.grandTotal.toStringAsFixed(2)} | Paid: ${paidAmount.toStringAsFixed(2)} | Change: ${change.toStringAsFixed(2)} | Method: $paymentMethod',
+      );
 
       // Asynchronously transmit bill to ERP API /api/Pos/POSBillSave after local save
       if (billSyncRepository != null) {

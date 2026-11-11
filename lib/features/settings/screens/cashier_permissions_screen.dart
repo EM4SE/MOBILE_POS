@@ -5,6 +5,7 @@ import '../../../core/services/authentication_service.dart';
 import '../../../core/services/cashier_permissions_service.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_dialog.dart';
@@ -14,12 +15,14 @@ class CashierPermissionsScreen extends StatefulWidget {
   final AuthenticationService authService;
   final UserRepository userRepository;
   final CashierPermissionsService permissionsService;
+  final SyncLogRepository? syncLogRepository;
 
   const CashierPermissionsScreen({
     super.key,
     required this.authService,
     required this.userRepository,
     required this.permissionsService,
+    this.syncLogRepository,
   });
 
   @override
@@ -120,6 +123,17 @@ class _CashierPermissionsScreenState extends State<CashierPermissionsScreen> {
         _selectedCashier!.username,
         _currentPermissions,
       );
+      try {
+        final enabledCount = _currentPermissions.values.where((v) => v).length;
+        final actor = widget.authService.currentUser.value?.displayName ?? 'Master Access';
+        await widget.syncLogRepository?.logAction(
+          actionType: 'USER_AUTH',
+          title: 'Cashier Permissions Updated',
+          details:
+              'Target: ${_selectedCashier!.displayName} (${_selectedCashier!.username}) | Updated by: $actor | Enabled: $enabledCount/${PosFeature.allFeatures.length}',
+          status: 'SUCCESS',
+        );
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _isSaving = false);
       AppDialog.showSnackBar(

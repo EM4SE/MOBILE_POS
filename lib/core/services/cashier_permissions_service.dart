@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/settings_repository.dart';
+import '../exceptions/app_exceptions.dart';
+import 'authentication_service.dart';
 
 class PosFeatureDefinition {
   final String id;
@@ -175,5 +177,30 @@ class CashierPermissionsService {
 
     final perms = await getPermissionsForCashier(user.username);
     return perms[featureId] ?? true;
+  }
+
+  /// Validates a cashier PIN without altering the logged-in session and verifies
+  /// that the cashier (or admin) holds permission for [featureId].
+  Future<User> authorizeFeatureWithPin({
+    required AuthenticationService authService,
+    required String pin,
+    required String featureId,
+    required String featureName,
+  }) async {
+    final activeUsers = await authService.verifyUsersByPin(pin);
+    final orderedCandidates = [
+      ...activeUsers.where((u) => u.isAdmin),
+      ...activeUsers.where((u) => !u.isAdmin),
+    ];
+
+    for (final candidate in orderedCandidates) {
+      if (await hasPermission(candidate, featureId)) {
+        return candidate;
+      }
+    }
+
+    final primaryMatch = orderedCandidates.first;
+    final label = primaryMatch.displayName.isNotEmpty ? primaryMatch.displayName : primaryMatch.username;
+    throw AuthenticationException('$label does not have permission for $featureName.');
   }
 }

@@ -9,7 +9,9 @@ import '../../../core/utils/feedback_helper.dart';
 import '../../../data/datasources/local/shift_local_datasource.dart';
 import '../../../data/models/business_day_model.dart';
 import '../../../data/models/shift_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/shift_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
 
@@ -17,12 +19,16 @@ class XReadingScreen extends StatefulWidget {
   final ShiftRepository shiftRepository;
   final ShiftService shiftService;
   final AuthenticationService authService;
+  final User? authorizedBy;
+  final SyncLogRepository? syncLogRepository;
 
   const XReadingScreen({
     super.key,
     required this.shiftRepository,
     required this.shiftService,
     required this.authService,
+    this.authorizedBy,
+    this.syncLogRepository,
   });
 
   @override
@@ -80,7 +86,7 @@ class _XReadingScreenState extends State<XReadingScreen> {
     setState(() => _isPrinting = true);
 
     try {
-      final user = widget.authService.currentUser.value;
+      final user = widget.authorizedBy ?? widget.authService.currentUser.value;
       final s = _shift!;
       final st = _stats!;
 
@@ -113,6 +119,16 @@ class _XReadingScreenState extends State<XReadingScreen> {
       setState(() => _isPrinting = false);
 
       if (result.success) {
+        try {
+          await widget.syncLogRepository?.logAction(
+            actionType: 'POS_ACTION',
+            title: 'X-Reading Report Printed',
+            details:
+                'Cashier: ${user?.displayName ?? s.cashierName} | Shift #${s.shiftNumber} | Expected Cash: ${CurrencyFormatter.formatWithSymbol(st.expectedCash)}',
+            status: 'SUCCESS',
+          );
+        } catch (_) {}
+        if (!mounted) return;
         AppDialog.showSnackBar(context, 'X-Reading report printed successfully.');
       } else {
         AppDialog.showSnackBar(context, 'Print failed: ${result.errorMessage}', isError: true);

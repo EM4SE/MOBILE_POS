@@ -8,6 +8,7 @@ import '../../../data/repositories/sync_log_repository.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../widgets/log_export_dialog.dart';
 
 class SyncLogsScreen extends StatefulWidget {
   final SyncLogRepository syncLogRepository;
@@ -41,9 +42,13 @@ class _SyncLogsScreenState extends State<SyncLogsScreen> {
 
   final List<Map<String, String>> _actionFilters = [
     {'label': 'All Actions', 'value': 'ALL'},
-    {'label': 'POS Bills', 'value': 'BILL_SYNC'},
+    {'label': 'Login / Auth', 'value': 'USER_AUTH'},
+    {'label': 'POS Actions', 'value': 'POS_ACTION'},
+    {'label': 'Cash Drawer', 'value': 'CASH_DRAWER'},
+    {'label': 'Shift Events', 'value': 'SHIFT_EVENT'},
+    {'label': 'POS Bills Sync', 'value': 'BILL_SYNC'},
     {'label': 'Product Sync', 'value': 'PRODUCT_SYNC'},
-    {'label': 'User & Shift', 'value': 'USER_AUTH'},
+    {'label': 'Settings', 'value': 'SETTINGS'},
   ];
 
   final List<Map<String, String>> _statusFilters = [
@@ -412,6 +417,18 @@ class _SyncLogsScreenState extends State<SyncLogsScreen> {
         title: 'Activity & ERP Sync Logs',
         showBackButton: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Download Logs to Excel (.xlsx)',
+            onPressed: () async {
+              await LogExportDialog.runExport(
+                context,
+                widget.syncLogRepository,
+                triggeredFrom: 'Activity & ERP Sync Logs Screen',
+              );
+              if (mounted) _loadLogs();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Logs',

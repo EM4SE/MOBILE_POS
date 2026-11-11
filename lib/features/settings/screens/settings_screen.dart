@@ -5,14 +5,17 @@ import '../../../app/theme/app_dimensions.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/services/authentication_service.dart';
 import '../../../core/services/printer_service.dart';
+import '../../../data/models/user_model.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../../shared/widgets/app_text_field.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../controllers/settings_controller.dart';
 import '../widgets/settings_tile.dart';
 
 import '../../../data/repositories/product_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 import '../../../core/services/api_service.dart';
 
 /// Settings screen featuring flat Windows 8-style configuration tiles
@@ -20,12 +23,16 @@ class SettingsScreen extends StatefulWidget {
   final SettingsController controller;
   final AuthenticationService authService;
   final ProductRepository? productRepository;
+  final User? authorizedBy;
+  final SyncLogRepository? syncLogRepository;
 
   const SettingsScreen({
     super.key,
     required this.controller,
     required this.authService,
     this.productRepository,
+    this.authorizedBy,
+    this.syncLogRepository,
   });
 
   @override
@@ -198,6 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final targetUrl = urlCtrl.text.trim();
                 final toSave = targetUrl.isEmpty ? ApiService.defaultBaseUrl : targetUrl;
                 await widget.controller.updateSetting('api_base_url', toSave);
+                await _logSettingChange('API Base URL Updated', 'URL: $toSave');
                 if (ctx.mounted) {
                   Navigator.of(ctx).pop();
                 }
@@ -275,6 +283,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'store_phone': phoneCtrl.text,
                 'currency_symbol': currCtrl.text,
               });
+              if (success) {
+                await _logSettingChange(
+                  'Store Settings Updated',
+                  'Store: ${nameCtrl.text.trim()} | Currency: ${currCtrl.text.trim()}',
+                );
+              }
               if (ctx.mounted) {
                 Navigator.of(ctx).pop();
               }
@@ -361,6 +375,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'printer_type': printerType,
                   'printer_ip': ipCtrl.text,
                 });
+                await _logSettingChange(
+                  'External Printer Settings Updated',
+                  'Type: $printerType | IP/Port: ${ipCtrl.text}',
+                );
                 if (ctx.mounted) {
                   Navigator.of(ctx).pop();
                 }
@@ -561,6 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () async {
                 await widget.controller.updateSetting('selected_device', selected);
                 await PrinterService.setSelectedDevice(selected);
+                await _logSettingChange('POS Hardware SDK Changed', 'Device: $selected');
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
                   final name = selected == 'DBL_Z93'
@@ -717,6 +736,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () async {
                 await widget.controller.updateSetting('printer_font', selectedFont);
                 await PrinterService.setPrinterFont(selectedFont);
+                await _logSettingChange('Receipt Printer Font Updated', 'Font: $selectedFont');
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
                   AppDialog.showSnackBar(context, 'Receipt printer font set to $selectedFont');
@@ -908,6 +928,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'invoice_prefix': prefixCtrl.text,
                 'next_shift_number': '$nextShiftVal',
               });
+              await _logSettingChange(
+                'POS Billing Preferences Updated',
+                'Tax: ${taxCtrl.text} | Prefix: ${prefixCtrl.text} | Next Shift: $nextShiftVal',
+              );
               if (ctx.mounted) {
                 Navigator.of(ctx).pop();
               }
@@ -971,9 +995,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed && mounted) {
-      widget.authService.logout();
+      widget.authService.logout(reason: 'Settings Logout');
       Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
     }
+  }
+
+  Future<void> _logSettingChange(String title, String details) async {
+    try {
+      final actor = (widget.authorizedBy ?? widget.authService.currentUser.value)?.displayName ??
+          'Master Access';
+      await widget.syncLogRepository?.logAction(
+        actionType: 'SETTINGS',
+        title: title,
+        details: 'User: $actor | $details',
+        status: 'SUCCESS',
+      );
+    } catch (_) {}
   }
 
   @override
@@ -984,6 +1021,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final deviceLabel = widget.controller.selectedDeviceDisplayName;
         final currentApiUrl = widget.controller.apiBaseUrl;
         final isCustomApi = widget.controller.isCustomApiBaseUrl;
+        final effectiveUser = widget.authorizedBy ?? widget.authService.currentUser.value;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -997,6 +1035,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.authorizedBy != null)
+                    AuthorizedByBanner(
+                      user: widget.authorizedBy!,
+                      margin: const EdgeInsets.only(bottom: AppDimensions.md),
+                    ),
                   Text(
                     'TERMINAL CONFIGURATION',
                     style: AppTextStyles.displaySmall.copyWith(fontWeight: FontWeight.w900),
@@ -1012,7 +1055,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _showApiSettingsDialog,
                   ),
 
-                  if (widget.authService.currentUser.value == null || widget.authService.currentUser.value?.isAdmin == true) ...[
+                  if (effectiveUser == null || effectiveUser.isAdmin) ...[
                     const SizedBox(height: AppDimensions.sm),
                     SettingsTile(
                       title: 'Cashier Management & Permissions',
@@ -1091,10 +1134,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       activeColor: AppColors.primary,
                       onChanged: (val) async {
                         await widget.controller.setSyncItemsOnLogin(val);
+                        await _logSettingChange('Sync Items on Login Toggled', 'Enabled: $val');
                       },
                     ),
                     onTap: () async {
-                      await widget.controller.setSyncItemsOnLogin(!widget.controller.syncItemsOnLogin);
+                      final next = !widget.controller.syncItemsOnLogin;
+                      await widget.controller.setSyncItemsOnLogin(next);
+                      await _logSettingChange('Sync Items on Login Toggled', 'Enabled: $next');
                     },
                   ),
 

@@ -45,6 +45,10 @@ class SyncActivityLog {
         return Icons.schedule_outlined;
       case 'CASH_DRAWER':
         return Icons.point_of_sale_outlined;
+      case 'POS_ACTION':
+        return Icons.shopping_cart_checkout_outlined;
+      case 'SETTINGS':
+        return Icons.settings_outlined;
       default:
         return Icons.sync;
     }

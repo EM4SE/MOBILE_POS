@@ -4,6 +4,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/customer_model.dart';
+import '../../../data/models/user_model.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../pos/controllers/pos_controller.dart';
@@ -16,6 +18,7 @@ class CustomersScreen extends StatefulWidget {
   final PosController posController;
   final bool isSelectionMode;
   final void Function(Customer customer)? onCustomerSelected;
+  final User? authorizedBy;
 
   const CustomersScreen({
     super.key,
@@ -23,6 +26,7 @@ class CustomersScreen extends StatefulWidget {
     required this.posController,
     this.isSelectionMode = false,
     this.onCustomerSelected,
+    this.authorizedBy,
   });
 
   @override
@@ -187,6 +191,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (widget.authorizedBy != null)
+              AuthorizedByBanner(user: widget.authorizedBy!),
             // Prominent Walk-in Button (Default / Unassigned)
             _buildWalkInTile(selectedCustomer == null),
 

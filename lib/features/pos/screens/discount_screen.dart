@@ -3,16 +3,20 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../data/models/user_model.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../../authentication/widgets/numeric_keypad.dart';
 import '../controllers/pos_controller.dart';
 
 /// Full-screen Bill Discount Configuration (Percentage & Fixed Amount)
 class DiscountScreen extends StatefulWidget {
   final PosController posController;
+  final User? authorizedBy;
 
   const DiscountScreen({
     super.key,
     required this.posController,
+    this.authorizedBy,
   });
 
   @override
@@ -98,6 +102,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
       _calculatedDiscountAmount,
       isPercentage: _isPercentage,
       percentage: _isPercentage ? _enteredValue : null,
+      overrideCashier: widget.authorizedBy,
     );
     Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.pos, (route) => false);
 
@@ -116,7 +121,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
 
   void _onRemoveDiscount() {
     FeedbackHelper.vibrate();
-    widget.posController.setDiscount(0.0);
+    widget.posController.setDiscount(0.0, overrideCashier: widget.authorizedBy);
     Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.pos, (route) => false);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -165,6 +170,11 @@ class _DiscountScreenState extends State<DiscountScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.authorizedBy != null)
+                      AuthorizedByBanner(
+                        user: widget.authorizedBy!,
+                        margin: const EdgeInsets.only(bottom: 8),
+                      ),
                     // Subtotal vs Discount vs New Total Card
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),

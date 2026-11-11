@@ -4,17 +4,21 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../data/models/user_model.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../controllers/pos_controller.dart';
 
 /// Clean, Responsive Full Dedicated Screen for Issuing Exchange Vouchers
 class ExchangeScreen extends StatefulWidget {
   final PosController controller;
+  final User? authorizedBy;
 
   const ExchangeScreen({
     super.key,
     required this.controller,
+    this.authorizedBy,
   });
 
   @override
@@ -29,7 +33,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      final voucher = await widget.controller.processExchange();
+      final voucher = await widget.controller.processExchange(
+        overrideCashier: widget.authorizedBy,
+      );
       if (!mounted) return;
       AppDialog.showSnackBar(
         context,
@@ -65,6 +71,11 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.authorizedBy != null)
+                      AuthorizedByBanner(
+                        user: widget.authorizedBy!,
+                        margin: const EdgeInsets.only(bottom: 8),
+                      ),
                     // Customer banner if assigned
                     if (customer != null) ...[
                       Container(

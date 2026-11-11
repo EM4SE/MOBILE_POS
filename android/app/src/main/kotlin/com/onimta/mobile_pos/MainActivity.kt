@@ -1,18 +1,34 @@
 package com.onimta.mobile_pos
 
+import android.Manifest
+import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.os.Vibrator
+import android.provider.MediaStore
 import android.util.Log
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
     private val TAG = "MainActivity"
     private val FEEDBACK_CHANNEL = "com.onimta.mobile_pos/feedback"
     private val PRINTER_CHANNEL = "com.onimta.mobile_pos/printer"
+    private val FILE_EXPORT_CHANNEL = "com.onimta.mobile_pos/file_export"
+    private val REQ_WRITE_STORAGE = 4102
+    private var pendingExportAction: (() -> Unit)? = null
     private var toneGenerator: ToneGenerator? = null
 
     private val isZ93Hardware by lazy {
@@ -281,6 +297,206 @@ class MainActivity : FlutterActivity() {
 
                 else -> result.notImplemented()
             }
+        }
+
+        // File Export Channel (Excel / Logs Download & Share)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FILE_EXPORT_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "saveToDownloads" -> {
+                    val fileName = call.argument<String>("fileName")
+                    val mimeType = call.argument<String>("mimeType")
+                        ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    val bytes = call.argument<ByteArray>("bytes")
+                    if (fileName.isNullOrBlank() || bytes == null) {
+                        result.error("INVALID_ARGS", "fileName and bytes are required", null)
+                        return@setMethodCallHandler
+                    }
+                    handleSaveToDownloads(fileName, mimeType, bytes, result)
+                }
+
+                "shareFile" -> {
+                    val uriStr = call.argument<String>("uri")
+                    val filePath = call.argument<String>("filePath")
+                    val fileName = call.argument<String>("fileName") ?: "export.xlsx"
+                    val mimeType = call.argument<String>("mimeType")
+                        ?: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    handleShareFile(uriStr, filePath, fileName, mimeType, result)
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun handleSaveToDownloads(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+        result: MethodChannel.Result
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = applicationContext.contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Could not create Downloads entry")
+                resolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(bytes)
+                    stream.flush()
+                } ?: throw IllegalStateException("Could not open Downloads output stream")
+
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+
+                result.success(
+                    mapOf(
+                        "success" to true,
+                        "path" to "Downloads/$fileName",
+                        "uri" to uri.toString()
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "MediaStore save failed: ${e.message}", e)
+                saveToFallbackDownloadsDir(fileName, bytes, result)
+            }
+            return
+        }
+
+        // Android 6..9 (API 23..28): check WRITE_EXTERNAL_STORAGE once before writing public Downloads
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingExportAction = {
+                saveLegacyPublicOrFallback(fileName, bytes, result)
+            }
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQ_WRITE_STORAGE
+            )
+            return
+        }
+
+        saveLegacyPublicOrFallback(fileName, bytes, result)
+    }
+
+    private fun saveLegacyPublicOrFallback(
+        fileName: String,
+        bytes: ByteArray,
+        result: MethodChannel.Result
+    ) {
+        try {
+            val hasPerm = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+            if (hasPerm) {
+                @Suppress("DEPRECATION")
+                val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!publicDownloads.exists()) publicDownloads.mkdirs()
+                val targetFile = File(publicDownloads, fileName)
+                FileOutputStream(targetFile).use { it.write(bytes) }
+                val uri = FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.fileprovider",
+                    targetFile
+                )
+                result.success(
+                    mapOf(
+                        "success" to true,
+                        "path" to targetFile.absolutePath,
+                        "uri" to uri.toString()
+                    )
+                )
+                return
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Legacy public Downloads write failed, using app Downloads dir: ${e.message}")
+        }
+        saveToFallbackDownloadsDir(fileName, bytes, result)
+    }
+
+    private fun saveToFallbackDownloadsDir(
+        fileName: String,
+        bytes: ByteArray,
+        result: MethodChannel.Result
+    ) {
+        try {
+            val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+            if (!dir.exists()) dir.mkdirs()
+            val targetFile = File(dir, fileName)
+            FileOutputStream(targetFile).use { it.write(bytes) }
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${applicationContext.packageName}.fileprovider",
+                targetFile
+            )
+            result.success(
+                mapOf(
+                    "success" to true,
+                    "path" to targetFile.absolutePath,
+                    "uri" to uri.toString()
+                )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Fallback file save failed: ${e.message}", e)
+            result.error("SAVE_FAILED", e.message ?: "Failed to save Excel file", null)
+        }
+    }
+
+    private fun handleShareFile(
+        uriStr: String?,
+        filePath: String?,
+        fileName: String,
+        mimeType: String,
+        result: MethodChannel.Result
+    ) {
+        try {
+            val contentUri: Uri = when {
+                !uriStr.isNullOrBlank() -> Uri.parse(uriStr)
+                !filePath.isNullOrBlank() -> FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.fileprovider",
+                    File(filePath)
+                )
+                else -> {
+                    result.error("INVALID_ARGS", "Missing file URI or path", null)
+                    return
+                }
+            }
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                putExtra(Intent.EXTRA_SUBJECT, fileName)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Share / Open $fileName")
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(chooser)
+            result.success(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Share failed: ${e.message}", e)
+            result.error("SHARE_FAILED", e.message ?: "Unable to share file", null)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_WRITE_STORAGE) {
+            val action = pendingExportAction
+            pendingExportAction = null
+            action?.invoke()
         }
     }
 

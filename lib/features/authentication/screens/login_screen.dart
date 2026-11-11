@@ -10,8 +10,10 @@ import '../../../core/utils/responsive_helper.dart';
 import '../../../core/widgets/pos_animated_loader.dart';
 import '../../../data/repositories/product_repository.dart';
 import '../../../data/repositories/settings_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 import '../../products/controllers/product_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
+import '../../settings/widgets/log_export_dialog.dart';
 import '../controllers/login_controller.dart';
 import '../widgets/numeric_keypad.dart';
 
@@ -23,6 +25,7 @@ class LoginScreen extends StatefulWidget {
   final SettingsRepository? settingsRepository;
   final ProductRepository? productRepository;
   final ProductController? productController;
+  final SyncLogRepository? syncLogRepository;
 
   const LoginScreen({
     super.key,
@@ -32,6 +35,7 @@ class LoginScreen extends StatefulWidget {
     this.settingsRepository,
     this.productRepository,
     this.productController,
+    this.syncLogRepository,
   });
 
   @override
@@ -339,6 +343,35 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.of(context).pushNamed(AppRoutes.cashierPermissions);
                   },
                 ),
+                const SizedBox(height: 12),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: AppColors.border.withOpacity(0.5)),
+                  ),
+                  tileColor: AppColors.surfaceSecondary,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.table_view_outlined, color: AppColors.success),
+                  ),
+                  title: const Text('Download Activity Logs (Excel)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  subtitle: const Text('Export all login, logout & POS action logs to .xlsx'),
+                  trailing: const Icon(Icons.download_rounded, size: 20, color: AppColors.success),
+                  onTap: widget.syncLogRepository == null
+                      ? null
+                      : () {
+                          Navigator.of(bCtx).pop();
+                          LogExportDialog.runExport(
+                            context,
+                            widget.syncLogRepository!,
+                            triggeredFrom: 'Master Management Access',
+                          );
+                        },
+                ),
                 const SizedBox(height: 8),
               ],
             ),
@@ -363,10 +396,27 @@ class _LoginScreenState extends State<LoginScreen> {
             void submit() {
               final entered = passwordController.text;
               if (entered == 'onimta1+') {
+                try {
+                  widget.syncLogRepository?.logAction(
+                    actionType: 'USER_AUTH',
+                    title: 'Master Management Access Unlocked',
+                    details: 'Master password verified from Login Screen',
+                    status: 'SUCCESS',
+                  );
+                } catch (_) {}
                 Navigator.of(dialogContext).pop();
                 _showMasterAccessMenu();
               } else {
                 FeedbackHelper.vibrate();
+                try {
+                  widget.syncLogRepository?.logAction(
+                    actionType: 'USER_AUTH',
+                    title: 'Master Management Access Failed',
+                    details: 'Incorrect master password entered on Login Screen',
+                    status: 'FAILED',
+                    errorMessage: 'Incorrect password',
+                  );
+                } catch (_) {}
                 setDialogState(() {
                   errorText = 'Incorrect password. Access denied.';
                 });

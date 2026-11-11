@@ -5,6 +5,7 @@ import 'sync_log_repository.dart';
 
 abstract class UserRepository {
   Future<User?> authenticateByPin(String pin);
+  Future<List<User>> getUsersByPin(String pin);
   Future<List<User>> getAllUsers();
   Future<User?> getUserById(int id);
   Future<int> insertUser(User user);
@@ -27,6 +28,11 @@ class UserRepositoryImpl implements UserRepository {
   @override
   Future<User?> authenticateByPin(String pin) {
     return _localDataSource.authenticateByPin(pin);
+  }
+
+  @override
+  Future<List<User>> getUsersByPin(String pin) {
+    return _localDataSource.getUsersByPin(pin);
   }
 
   @override

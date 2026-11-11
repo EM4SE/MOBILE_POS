@@ -4,6 +4,7 @@ import '../../models/user_model.dart';
 
 abstract class UserLocalDataSource {
   Future<User?> authenticateByPin(String pin);
+  Future<List<User>> getUsersByPin(String pin);
   Future<List<User>> getAllUsers();
   Future<User?> getUserById(int id);
   Future<int> insertUser(User user);
@@ -27,6 +28,17 @@ class UserLocalDataSourceImpl implements UserLocalDataSource {
     );
     if (results.isEmpty) return null;
     return User.fromMap(results.first);
+  }
+
+  @override
+  Future<List<User>> getUsersByPin(String pin) async {
+    final results = await _databaseService.query(
+      DatabaseConstants.tableUsers,
+      where: '${DatabaseConstants.colPin} = ?',
+      whereArgs: [pin],
+      orderBy: '${DatabaseConstants.colId} ASC',
+    );
+    return results.map(User.fromMap).toList();
   }
 
   @override

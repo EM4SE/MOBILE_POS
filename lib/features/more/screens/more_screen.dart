@@ -8,9 +8,12 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../pos/controllers/pos_controller.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/product_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
+import '../../pos/controllers/pos_controller.dart';
 import '../../products/controllers/product_controller.dart';
+import '../widgets/pin_override_sheet.dart';
 
 /// 3-Per-Row Square Grid Action Menu for Cashier & POS Operations with Permission Control
 class MoreScreen extends StatefulWidget {
@@ -19,6 +22,7 @@ class MoreScreen extends StatefulWidget {
   final ProductRepository? productRepository;
   final ProductController? productController;
   final CashierPermissionsService? permissionsService;
+  final SyncLogRepository? syncLogRepository;
 
   const MoreScreen({
     super.key,
@@ -27,6 +31,7 @@ class MoreScreen extends StatefulWidget {
     this.productRepository,
     this.productController,
     this.permissionsService,
+    this.syncLogRepository,
   });
 
   @override
@@ -61,33 +66,53 @@ class _MoreScreenState extends State<MoreScreen> {
     return _permissions[featureId] ?? true;
   }
 
-  void _showAccessDeniedDialog(BuildContext context, String featureName) {
+  Future<void> _handleRestrictedTileTap(
+    BuildContext context, {
+    required String featureId,
+    required String featureName,
+    required void Function(User? authorizedBy) onAuthorized,
+  }) async {
     FeedbackHelper.vibrate();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: const Row(
-          children: [
-            Icon(Icons.lock_outline, color: AppColors.error),
-            SizedBox(width: 8),
-            Text('ACCESS RESTRICTED', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-          ],
+    if (_isAllowed(featureId)) {
+      onAuthorized(null);
+      return;
+    }
+
+    if (widget.permissionsService == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Permission service unavailable to verify "$featureName".'),
+          backgroundColor: AppColors.error,
         ),
-        content: Text(
-          'You do not have permission to access "$featureName".\n\nPlease contact an Admin cashier to enable access for your account in Settings > Cashier Permissions.',
-          style: const TextStyle(fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          AppButton(
-            label: 'OK',
-            variant: AppButtonVariant.primary,
-            width: 90,
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-        ],
-      ),
+      );
+      return;
+    }
+
+    final currentUser = widget.authService.currentUser.value;
+    final authorizer = await PinOverrideSheet.show(
+      context,
+      featureId: featureId,
+      featureName: featureName,
+      authService: widget.authService,
+      permissionsService: widget.permissionsService!,
+      currentCashierName: currentUser?.displayName,
+      syncLogRepository: widget.syncLogRepository,
     );
+
+    if (authorizer == null || !context.mounted) return;
+
+    try {
+      await widget.syncLogRepository?.logAction(
+        actionType: 'USER_AUTH',
+        title: 'One-Time Override: $featureName',
+        details:
+            'Cashier: ${currentUser?.displayName ?? "Unknown"} | Authorized by: ${authorizer.displayName} (${authorizer.username})',
+        status: 'SUCCESS',
+      );
+    } catch (_) {}
+
+    if (!context.mounted) return;
+    onAuthorized(authorizer);
   }
 
   Future<void> _handleLogout(BuildContext context) async {
@@ -100,7 +125,7 @@ class _MoreScreenState extends State<MoreScreen> {
     );
 
     if (confirmed && context.mounted) {
-      widget.authService.logout();
+      widget.authService.logout(reason: 'More Menu Logout');
       Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
     }
   }
@@ -108,7 +133,7 @@ class _MoreScreenState extends State<MoreScreen> {
   // ---------------------------------------------------------------------------
   // Action: EXCHANGE (Dedicated Screen)
   // ---------------------------------------------------------------------------
-  void _handleExchange(BuildContext context) {
+  void _handleExchange(BuildContext context, {User? authorizedBy}) {
     FeedbackHelper.vibrate();
     if (widget.posController.cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -120,13 +145,13 @@ class _MoreScreenState extends State<MoreScreen> {
       );
       return;
     }
-    Navigator.of(context).pushNamed(AppRoutes.exchange);
+    Navigator.of(context).pushNamed(AppRoutes.exchange, arguments: authorizedBy);
   }
 
   // ---------------------------------------------------------------------------
   // Action: RETURN (Dedicated Screen)
   // ---------------------------------------------------------------------------
-  void _handleReturn(BuildContext context) {
+  void _handleReturn(BuildContext context, {User? authorizedBy}) {
     FeedbackHelper.vibrate();
     if (widget.posController.cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -138,13 +163,13 @@ class _MoreScreenState extends State<MoreScreen> {
       );
       return;
     }
-    Navigator.of(context).pushNamed(AppRoutes.returnItem);
+    Navigator.of(context).pushNamed(AppRoutes.returnItem, arguments: authorizedBy);
   }
 
   // ---------------------------------------------------------------------------
   // Action: DISCOUNT
   // ---------------------------------------------------------------------------
-  Future<void> _handleDiscount(BuildContext context) async {
+  Future<void> _handleDiscount(BuildContext context, {User? authorizedBy}) async {
     FeedbackHelper.vibrate();
     if (widget.posController.cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -157,13 +182,13 @@ class _MoreScreenState extends State<MoreScreen> {
       return;
     }
 
-    Navigator.of(context).pushNamed(AppRoutes.discount);
+    Navigator.of(context).pushNamed(AppRoutes.discount, arguments: authorizedBy);
   }
 
   // ---------------------------------------------------------------------------
   // Action: NEW BILL
   // ---------------------------------------------------------------------------
-  Future<void> _handleNewBill(BuildContext context) async {
+  Future<void> _handleNewBill(BuildContext context, {User? overrideCashier}) async {
     FeedbackHelper.vibrate();
     if (widget.posController.cartItems.isNotEmpty) {
       final action = await _showCartConflictDialog(
@@ -173,7 +198,10 @@ class _MoreScreenState extends State<MoreScreen> {
       );
 
       if (action == 'HOLD') {
-        final heldSale = await widget.posController.holdCurrentBill(printReceipt: true);
+        final heldSale = await widget.posController.holdCurrentBill(
+          printReceipt: true,
+          overrideCashier: overrideCashier,
+        );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -185,7 +213,11 @@ class _MoreScreenState extends State<MoreScreen> {
           Navigator.of(context).pop();
         }
       } else if (action == 'VOID') {
-        widget.posController.clearCart();
+        widget.posController.clearCart(
+          logVoid: true,
+          overrideCashier: overrideCashier,
+          reason: 'Bill Voided via New Bill',
+        );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -198,6 +230,16 @@ class _MoreScreenState extends State<MoreScreen> {
         }
       }
     } else {
+      try {
+        await widget.syncLogRepository?.logAction(
+          actionType: 'POS_ACTION',
+          title: 'New Bill Started',
+          details:
+              'Cashier: ${(overrideCashier ?? widget.authService.currentUser.value)?.displayName ?? "Admin"}',
+          status: 'SUCCESS',
+        );
+      } catch (_) {}
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('New bill is ready.'),
@@ -212,7 +254,7 @@ class _MoreScreenState extends State<MoreScreen> {
   // ---------------------------------------------------------------------------
   // Action: VOID BILL
   // ---------------------------------------------------------------------------
-  Future<void> _handleVoidBill(BuildContext context) async {
+  Future<void> _handleVoidBill(BuildContext context, {User? overrideCashier}) async {
     FeedbackHelper.vibrate();
     if (widget.posController.cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -225,16 +267,21 @@ class _MoreScreenState extends State<MoreScreen> {
       return;
     }
 
+    final itemCount = widget.posController.cartItems.length;
     final confirmed = await AppDialog.confirm(
       context,
       title: 'Void Current Bill',
-      message: 'Are you sure you want to void all ${widget.posController.cartItems.length} items from the current cart?',
+      message: 'Are you sure you want to void all $itemCount items from the current cart?',
       confirmLabel: 'Void Bill',
       confirmVariant: AppButtonVariant.danger,
     );
 
     if (confirmed && context.mounted) {
-      widget.posController.clearCart();
+      widget.posController.clearCart(
+        logVoid: true,
+        overrideCashier: overrideCashier,
+        reason: 'Bill Voided ($itemCount items)',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Bill has been voided successfully.'),
@@ -322,7 +369,7 @@ class _MoreScreenState extends State<MoreScreen> {
   // ---------------------------------------------------------------------------
   // Action: DOWNLOAD / SYNC ALL PRODUCTS FROM ERP
   // ---------------------------------------------------------------------------
-  Future<void> _handleDownloadProducts(BuildContext context) async {
+  Future<void> _handleDownloadProducts(BuildContext context, {User? overrideCashier}) async {
     FeedbackHelper.vibrate();
 
     if (widget.productRepository == null) {
@@ -354,6 +401,16 @@ class _MoreScreenState extends State<MoreScreen> {
                 });
               },
             ).then((totalCount) async {
+              if (overrideCashier != null) {
+                try {
+                  await widget.syncLogRepository?.logAction(
+                    actionType: 'USER_AUTH',
+                    title: 'Product Download Authorized ($totalCount items)',
+                    details: 'Authorized by: ${overrideCashier.displayName} (${overrideCashier.username})',
+                    status: 'SUCCESS',
+                  );
+                } catch (_) {}
+              }
               setDialogState(() {
                 isCompleted = true;
                 itemCount = totalCount;
@@ -442,12 +499,13 @@ class _MoreScreenState extends State<MoreScreen> {
     required String label,
     required IconData icon,
     required Color color,
-    required VoidCallback onTap,
+    required void Function(User? authorizedBy) onTap,
     String? featureId,
     String? badgeText,
   }) {
     final bool allowed = featureId == null ? true : _isAllowed(featureId);
     final Color displayColor = allowed ? color : color.withOpacity(0.45);
+    final String cleanLabel = label.replaceAll('\n', ' ');
 
     return Material(
       color: displayColor,
@@ -455,11 +513,16 @@ class _MoreScreenState extends State<MoreScreen> {
       elevation: allowed ? 2 : 0,
       child: InkWell(
         onTap: () {
-          if (!allowed) {
-            _showAccessDeniedDialog(context, label.replaceAll('\n', ' '));
+          if (featureId != null && !allowed) {
+            _handleRestrictedTileTap(
+              context,
+              featureId: featureId,
+              featureName: cleanLabel,
+              onAuthorized: onTap,
+            );
           } else {
             FeedbackHelper.vibrate();
-            onTap();
+            onTap(null);
           }
         },
         splashColor: Colors.white24,
@@ -585,7 +648,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'NEW BILL',
                     icon: Icons.note_add_outlined,
                     color: const Color(0xFF0D6EFD), // POS Blue
-                    onTap: () => _handleNewBill(context),
+                    onTap: (auth) => _handleNewBill(context, overrideCashier: auth),
                   ),
 
                   // 2. VOID BILL
@@ -595,7 +658,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'VOID BILL',
                     icon: Icons.delete_sweep_outlined,
                     color: const Color(0xFFDC3545), // Danger Red
-                    onTap: () => _handleVoidBill(context),
+                    onTap: (auth) => _handleVoidBill(context, overrideCashier: auth),
                   ),
 
                   // 3. DISCOUNT (Percentage & Amount Discount)
@@ -608,7 +671,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     badgeText: widget.posController.discountAmount > 0
                         ? '-${CurrencyFormatter.formatWithSymbol(widget.posController.discountAmount)}'
                         : null,
-                    onTap: () => _handleDiscount(context),
+                    onTap: (auth) => _handleDiscount(context, authorizedBy: auth),
                   ),
 
                   // 4. EXCHANGE (Print Voucher with Barcode)
@@ -619,7 +682,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     icon: Icons.sync_alt,
                     color: const Color(0xFFEA580C), // Orange Amber
                     badgeText: widget.posController.cartItems.isNotEmpty ? '${widget.posController.totalItemCount}' : null,
-                    onTap: () => _handleExchange(context),
+                    onTap: (auth) => _handleExchange(context, authorizedBy: auth),
                   ),
 
                   // 5. RETURN (Item Return & Refund Without Credit)
@@ -630,7 +693,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     icon: Icons.assignment_return,
                     color: const Color(0xFFE11D48), // Crimson Rose
                     badgeText: widget.posController.cartItems.isNotEmpty ? '${widget.posController.totalItemCount}' : null,
-                    onTap: () => _handleReturn(context),
+                    onTap: (auth) => _handleReturn(context, authorizedBy: auth),
                   ),
 
                   // 6. HELD BILL (Dedicated Full Screen)
@@ -641,7 +704,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     icon: Icons.pause_circle_outline,
                     color: const Color(0xFFE67E22), // Amber Orange
                     badgeText: heldCount > 0 ? '$heldCount' : null,
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.heldBills),
+                    onTap: (auth) => Navigator.of(context).pushNamed(AppRoutes.heldBills, arguments: auth),
                   ),
 
                   // 7. PAID IN (Numeric Keypad Screen)
@@ -651,7 +714,10 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'PAID IN',
                     icon: Icons.arrow_downward,
                     color: const Color(0xFF198754), // Green
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.cashMovement, arguments: true),
+                    onTap: (auth) => Navigator.of(context).pushNamed(
+                      AppRoutes.cashMovement,
+                      arguments: {'isPaidIn': true, 'authorizedBy': auth},
+                    ),
                   ),
 
                   // 8. PAID OUTS (Numeric Keypad Screen)
@@ -661,7 +727,10 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'PAID OUTS',
                     icon: Icons.arrow_upward,
                     color: const Color(0xFFD97706), // Warm Amber
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.cashMovement, arguments: false),
+                    onTap: (auth) => Navigator.of(context).pushNamed(
+                      AppRoutes.cashMovement,
+                      arguments: {'isPaidIn': false, 'authorizedBy': auth},
+                    ),
                   ),
 
                   // 9. REPORTS (Item Wise, Total Sales, Z Reading, X Reading)
@@ -671,7 +740,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'REPORTS',
                     icon: Icons.analytics_outlined,
                     color: const Color(0xFF4F46E5), // Indigo
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.reports),
+                    onTap: (auth) => Navigator.of(context).pushNamed(AppRoutes.reports, arguments: auth),
                   ),
 
                   // 10. CUSTOMERS
@@ -681,7 +750,10 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'CUSTOMERS',
                     icon: Icons.people_outline,
                     color: const Color(0xFF0891B2), // Cyan/Teal
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.customers),
+                    onTap: (auth) => Navigator.of(context).pushNamed(
+                      AppRoutes.customers,
+                      arguments: {'authorizedBy': auth},
+                    ),
                   ),
 
                   // 11. PRODUCTS
@@ -691,7 +763,10 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'PRODUCTS',
                     icon: Icons.inventory_2_outlined,
                     color: const Color(0xFF6366F1), // Indigo
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.products),
+                    onTap: (auth) => Navigator.of(context).pushNamed(
+                      AppRoutes.products,
+                      arguments: {'authorizedBy': auth},
+                    ),
                   ),
 
                   // 12. DOWNLOAD PRODUCTS
@@ -701,7 +776,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'DOWNLOAD\nPRODUCTS',
                     icon: Icons.cloud_download_outlined,
                     color: const Color(0xFF0284C7), // Sky Blue
-                    onTap: () => _handleDownloadProducts(context),
+                    onTap: (auth) => _handleDownloadProducts(context, overrideCashier: auth),
                   ),
 
                   // 13. SETTINGS
@@ -711,7 +786,9 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'SETTINGS',
                     icon: Icons.settings_outlined,
                     color: const Color(0xFF475569), // Slate
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.settings),
+                    onTap: (auth) => Navigator.of(context)
+                        .pushNamed(AppRoutes.settings, arguments: auth)
+                        .then((_) => _loadCashierPermissions()),
                   ),
 
                   // 14. SHIFT END (Cash Drawer Reconciliation & Day End)
@@ -721,7 +798,7 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'SHIFT END',
                     icon: Icons.schedule,
                     color: const Color(0xFFC026D3), // Magenta / Purple
-                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.endShift),
+                    onTap: (auth) => Navigator.of(context).pushNamed(AppRoutes.endShift, arguments: auth),
                   ),
 
                   // 15. POS BILLING / BACK (Always permitted)
@@ -730,7 +807,16 @@ class _MoreScreenState extends State<MoreScreen> {
                     label: 'POS BILLING',
                     icon: Icons.point_of_sale,
                     color: const Color(0xFF0F766E), // Dark Teal
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: (_) => Navigator.of(context).pop(),
+                  ),
+
+                  // 16. LOGOUT (Always permitted)
+                  _buildSquareTile(
+                    context: context,
+                    label: 'LOGOUT',
+                    icon: Icons.power_settings_new,
+                    color: AppColors.tileLogout,
+                    onTap: (_) => _handleLogout(context),
                   ),
                 ],
               );

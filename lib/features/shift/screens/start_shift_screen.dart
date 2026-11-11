@@ -215,7 +215,7 @@ class _StartShiftScreenState extends State<StartShiftScreen> {
             icon: const Icon(Icons.logout, color: Colors.white70),
             tooltip: 'Logout',
             onPressed: () {
-              widget.authService.logout();
+              widget.authService.logout(reason: 'Start Shift Screen Logout');
               Navigator.of(context).pushReplacementNamed(AppRoutes.login);
             },
           ),

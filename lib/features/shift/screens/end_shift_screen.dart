@@ -5,17 +5,21 @@ import '../../../core/services/authentication_service.dart';
 import '../../../core/services/shift_service.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../core/widgets/pos_animated_loader.dart';
+import '../../../data/models/user_model.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../../authentication/widgets/numeric_keypad.dart';
 
 /// Screen to enter closing cash in hand and perform Shift End / Day End (blind closing)
 class EndShiftScreen extends StatefulWidget {
   final ShiftService shiftService;
   final AuthenticationService authService;
+  final User? authorizedBy;
 
   const EndShiftScreen({
     super.key,
     required this.shiftService,
     required this.authService,
+    this.authorizedBy,
   });
 
   @override
@@ -67,7 +71,7 @@ class _EndShiftScreenState extends State<EndShiftScreen> {
   }
 
   Future<void> _handleConfirmEndShift() async {
-    final user = widget.authService.currentUser.value;
+    final user = widget.authorizedBy ?? widget.authService.currentUser.value;
     if (user == null) return;
 
     // Show Dialog asking whether to also perform Day End
@@ -146,7 +150,7 @@ class _EndShiftScreenState extends State<EndShiftScreen> {
         performDayEnd: performDayEnd,
       );
 
-      widget.authService.logout();
+      widget.authService.logout(reason: performDayEnd ? 'Shift & Day End' : 'Shift End');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -177,7 +181,7 @@ class _EndShiftScreenState extends State<EndShiftScreen> {
     const themeColor = Color(0xFFD97706); // Warm Amber
     final currentShift = widget.shiftService.activeShift.value;
     final currentDay = widget.shiftService.activeDay.value;
-    final user = widget.authService.currentUser.value;
+    final user = widget.authorizedBy ?? widget.authService.currentUser.value;
     final presets = [0, 1000, 2000, 5000, 10000, 20000, 50000];
 
     return Scaffold(
@@ -203,6 +207,11 @@ class _EndShiftScreenState extends State<EndShiftScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (widget.authorizedBy != null)
+                          AuthorizedByBanner(
+                            user: widget.authorizedBy!,
+                            margin: const EdgeInsets.only(bottom: 10),
+                          ),
                         // Simple Info Card
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

@@ -3,7 +3,9 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_dimensions.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/product_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../shared/widgets/app_dialog.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../controllers/product_controller.dart';
@@ -15,6 +17,7 @@ class ProductsScreen extends StatefulWidget {
   final PosController? posController;
   final bool isSelectionMode;
   final void Function(Product product)? onProductSelected;
+  final User? authorizedBy;
 
   const ProductsScreen({
     super.key,
@@ -22,6 +25,7 @@ class ProductsScreen extends StatefulWidget {
     this.posController,
     this.isSelectionMode = false,
     this.onProductSelected,
+    this.authorizedBy,
   });
 
   @override
@@ -235,119 +239,127 @@ class _ProductsScreenState extends State<ProductsScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListenableBuilder(
-          listenable: widget.controller,
-          builder: (context, _) {
-            if (widget.controller.isLoading) {
-              return const LoadingIndicator(message: 'Loading products...');
-            }
+        child: Column(
+          children: [
+            if (widget.authorizedBy != null)
+              AuthorizedByBanner(user: widget.authorizedBy!),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  if (widget.controller.isLoading) {
+                    return const LoadingIndicator(message: 'Loading products...');
+                  }
 
-            final products = widget.controller.products;
+                  final products = widget.controller.products;
 
-            if (products.isEmpty) {
-              return RefreshIndicator(
-                onRefresh: () async {
-                  await widget.controller.loadProducts(refresh: true);
-                },
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.6,
-                      child: EmptyState(
-                        icon: Icons.inventory_2_outlined,
-                        title: 'No Products Found',
-                        message: _searchController.text.isNotEmpty
-                            ? 'No items match "${_searchController.text}"'
-                            : 'Product catalog is empty. Tap sync to load from API.',
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return RefreshIndicator(
-              onRefresh: () async {
-                await widget.controller.loadProducts(refresh: true);
-              },
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  // Total Count Header Info
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  if (products.isEmpty) {
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        await widget.controller.loadProducts(refresh: true);
+                      },
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
                         children: [
-                          Text(
-                            'Showing ${products.length} of ${widget.controller.totalCount} items',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.6,
+                            child: EmptyState(
+                              icon: Icons.inventory_2_outlined,
+                              title: 'No Products Found',
+                              message: _searchController.text.isNotEmpty
+                                  ? 'No items match "${_searchController.text}"'
+                                  : 'Product catalog is empty. Tap sync to load from API.',
                             ),
                           ),
-                          if (widget.controller.hasMore)
-                            const Text(
-                              'Scroll for more',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontStyle: FontStyle.italic,
-                                color: AppColors.textLight,
-                              ),
-                            ),
                         ],
                       ),
-                    ),
-                  ),
+                    );
+                  }
 
-                  // Product Grid Cards
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 7,
-                        mainAxisSpacing: 7,
-                        childAspectRatio: 0.95,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return _buildProductCard(products[index]);
-                        },
-                        childCount: products.length,
-                      ),
-                    ),
-                  ),
-
-                  // Bottom Loading Indicator for Infinite Scroll
-                  if (widget.controller.isLoadingMore)
-                    const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        child: Center(
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await widget.controller.loadProducts(refresh: true);
+                    },
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        // Total Count Header Info
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Showing ${products.length} of ${widget.controller.totalCount} items',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                if (widget.controller.hasMore)
+                                  const Text(
+                                    'Scroll for more',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontStyle: FontStyle.italic,
+                                      color: AppColors.textLight,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                    ),
 
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: 12),
-                  ),
-                ],
+                        // Product Grid Cards
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          sliver: SliverGrid(
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 7,
+                              mainAxisSpacing: 7,
+                              childAspectRatio: 0.95,
+                            ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                return _buildProductCard(products[index]);
+                              },
+                              childCount: products.length,
+                            ),
+                          ),
+                        ),
+
+                        // Bottom Loading Indicator for Infinite Scroll
+                        if (widget.controller.isLoadingMore)
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: 12),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

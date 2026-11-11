@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../../../core/services/authentication_service.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/repositories/product_repository.dart';
+import '../../../data/repositories/sync_log_repository.dart';
 
 /// Controller managing product inventory state, pagination, debounced search, and CRUD operations
 class ProductController extends ChangeNotifier {
   final ProductRepository _productRepository;
+  final SyncLogRepository? _syncLogRepository;
+  final AuthenticationService? _authService;
 
   static const int pageSize = 30;
 
@@ -19,7 +23,23 @@ class ProductController extends ChangeNotifier {
   String? _errorMessage;
   Timer? _debounceTimer;
 
-  ProductController(this._productRepository);
+  ProductController(
+    this._productRepository, [
+    this._syncLogRepository,
+    this._authService,
+  ]);
+
+  Future<void> _logAction(String title, String details) async {
+    try {
+      final cashier = _authService?.currentUser.value?.displayName ?? 'System';
+      await _syncLogRepository?.logAction(
+        actionType: 'POS_ACTION',
+        title: title,
+        details: 'Cashier: $cashier | $details',
+        status: 'SUCCESS',
+      );
+    } catch (_) {}
+  }
 
   List<Product> get products => List.unmodifiable(_products);
   bool get isLoading => _isLoading;
@@ -164,8 +184,10 @@ class ProductController extends ChangeNotifier {
 
       if (id == null) {
         await _productRepository.insertProduct(product);
+        _logAction('Product Created: ${product.code}', '${product.description} | Price: ${product.price.toStringAsFixed(2)}');
       } else {
         await _productRepository.updateProduct(product);
+        _logAction('Product Updated: ${product.code}', '${product.description} | Price: ${product.price.toStringAsFixed(2)} | Active: ${product.active}');
       }
 
       await loadProducts(refresh: true);
@@ -181,6 +203,7 @@ class ProductController extends ChangeNotifier {
   Future<bool> deleteProduct(int id) async {
     try {
       await _productRepository.deleteProduct(id);
+      _logAction('Product Deleted', 'Product ID: $id');
       await loadProducts(refresh: true);
       return true;
     } catch (e) {
@@ -194,6 +217,10 @@ class ProductController extends ChangeNotifier {
     try {
       final updated = product.copyWith(active: !product.active);
       await _productRepository.updateProduct(updated);
+      _logAction(
+        'Product Status Toggled: ${product.code}',
+        '${product.description} | Active: ${updated.active}',
+      );
       await loadProducts(refresh: true);
       return true;
     } catch (e) {

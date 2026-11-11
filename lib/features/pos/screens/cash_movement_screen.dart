@@ -5,6 +5,8 @@ import '../../../core/services/printer_service.dart';
 import '../../../core/services/shift_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
+import '../../../data/models/user_model.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../../authentication/widgets/numeric_keypad.dart';
 
 /// Full-screen Cash In / Cash Out Screen with Hardware-friendly Numeric Keypad
@@ -12,12 +14,14 @@ class CashMovementScreen extends StatefulWidget {
   final bool isPaidIn;
   final ShiftService? shiftService;
   final AuthenticationService? authService;
+  final User? authorizedBy;
 
   const CashMovementScreen({
     super.key,
     required this.isPaidIn,
     this.shiftService,
     this.authService,
+    this.authorizedBy,
   });
 
   @override
@@ -86,7 +90,7 @@ class _CashMovementScreenState extends State<CashMovementScreen> {
 
     FeedbackHelper.playScanFeedback();
 
-    final cashierName = widget.authService?.currentUser.value?.displayName ?? 'Admin';
+    final cashierName = (widget.authorizedBy ?? widget.authService?.currentUser.value)?.displayName ?? 'Admin';
 
     try {
       // 1. Record cash movement in shift & database
@@ -150,6 +154,11 @@ class _CashMovementScreenState extends State<CashMovementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.authorizedBy != null)
+                      AuthorizedByBanner(
+                        user: widget.authorizedBy!,
+                        margin: const EdgeInsets.only(bottom: 10),
+                      ),
                     // Amount Display Card
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

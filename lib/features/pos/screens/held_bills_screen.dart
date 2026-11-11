@@ -6,17 +6,21 @@ import '../../../core/services/printer_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/feedback_helper.dart';
 import '../../../data/models/sale_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/authorized_by_banner.dart';
 import '../controllers/pos_controller.dart';
 
 /// Compact Single-Row Held Bills Management Screen
 class HeldBillsScreen extends StatelessWidget {
   final PosController posController;
+  final User? authorizedBy;
 
   const HeldBillsScreen({
     super.key,
     required this.posController,
+    this.authorizedBy,
   });
 
   String _formatDateTime(String? dateStr) {
@@ -49,9 +53,13 @@ class HeldBillsScreen extends StatelessWidget {
       if (action == null) return;
 
       if (action == 'HOLD') {
-        await posController.holdCurrentBill();
+        await posController.holdCurrentBill(overrideCashier: authorizedBy);
       } else if (action == 'VOID') {
-        posController.clearCart();
+        posController.clearCart(
+          logVoid: true,
+          overrideCashier: authorizedBy,
+          reason: 'Bill Voided for Held Recall',
+        );
       }
     }
 
@@ -211,150 +219,161 @@ class HeldBillsScreen extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: AnimatedBuilder(
-          animation: posController,
-          builder: (ctx, _) {
-            final heldBills = posController.heldBills;
+        child: Column(
+          children: [
+            if (authorizedBy != null)
+              AuthorizedByBanner(
+                user: authorizedBy!,
+                margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              ),
+            Expanded(
+              child: AnimatedBuilder(
+                animation: posController,
+                builder: (ctx, _) {
+                  final heldBills = posController.heldBills;
 
-            if (heldBills.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppDimensions.xl),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.pause_circle_outline,
-                        size: 64,
-                        color: Colors.white.withOpacity(0.2),
-                      ),
-                      const SizedBox(height: AppDimensions.md),
-                      Text(
-                        'NO HELD BILLS',
-                        style: AppTextStyles.headlineMedium.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimensions.sm),
-                      const Text(
-                        'Bills put on hold during POS billing will appear here.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white38, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            return ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: heldBills.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
-              itemBuilder: (itemCtx, index) {
-                final bill = heldBills[index];
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    border: Border.all(color: AppColors.border, width: 1),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  child: Row(
-                    children: [
-                      // 1. Left: Invoice No & Date/Time
-                      Expanded(
+                  if (heldBills.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppDimensions.xl),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              bill.invoiceNo,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                color: AppColors.accent,
-                                letterSpacing: 0.5,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            Icon(
+                              Icons.pause_circle_outline,
+                              size: 64,
+                              color: Colors.white.withOpacity(0.2),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: AppDimensions.md),
                             Text(
-                              _formatDateTime(bill.createdAt),
-                              style: const TextStyle(
-                                fontSize: 10.5,
+                              'NO HELD BILLS',
+                              style: AppTextStyles.headlineMedium.copyWith(
                                 color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
                               ),
-                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: AppDimensions.sm),
+                            const Text(
+                              'Bills put on hold during POS billing will appear here.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white38, fontSize: 13),
                             ),
                           ],
                         ),
                       ),
+                    );
+                  }
 
-                      const SizedBox(width: 6),
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: heldBills.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (itemCtx, index) {
+                      final bill = heldBills[index];
 
-                      // 2. Middle: Total Amount
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          CurrencyFormatter.formatWithSymbol(bill.grandTotal),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13.5,
-                            color: AppColors.success,
-                          ),
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border.all(color: AppColors.border, width: 1),
                         ),
-                      ),
-
-                      const SizedBox(width: 6),
-
-                      // 3. Right: Single Row Action Buttons (Print, Discard & Recall)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.print_outlined, color: AppColors.accent, size: 19),
-                            tooltip: 'Print Barcode Slip',
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                            onPressed: () => _handlePrint(context, bill),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 19),
-                            tooltip: 'Discard',
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                            onPressed: () => _handleDiscard(context, bill),
-                          ),
-                          const SizedBox(width: 2),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0D6EFD), // POS Blue
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              minimumSize: const Size(48, 30),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Row(
+                          children: [
+                            // 1. Left: Invoice No & Date/Time
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    bill.invoiceNo,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      color: AppColors.accent,
+                                      letterSpacing: 0.5,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _formatDateTime(bill.createdAt),
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
-                            onPressed: () => _handleRecall(context, bill),
-                            child: const Text(
-                              'RECALL',
-                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10.5, letterSpacing: 0.5),
+
+                            const SizedBox(width: 6),
+
+                            // 2. Middle: Total Amount
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                CurrencyFormatter.formatWithSymbol(bill.grandTotal),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13.5,
+                                  color: AppColors.success,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+
+                            const SizedBox(width: 6),
+
+                            // 3. Right: Single Row Action Buttons (Print, Discard & Recall)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.print_outlined, color: AppColors.accent, size: 19),
+                                  tooltip: 'Print Barcode Slip',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.all(4),
+                                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                  onPressed: () => _handlePrint(context, bill),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 19),
+                                  tooltip: 'Discard',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.all(4),
+                                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                  onPressed: () => _handleDiscard(context, bill),
+                                ),
+                                const SizedBox(width: 2),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0D6EFD), // POS Blue
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    minimumSize: const Size(48, 30),
+                                  ),
+                                  onPressed: () => _handleRecall(context, bill),
+                                  child: const Text(
+                                    'RECALL',
+                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10.5, letterSpacing: 0.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

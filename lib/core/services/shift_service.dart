@@ -182,6 +182,15 @@ class ShiftServiceImpl implements ShiftService {
       reason: reason,
       cashierName: cashierName,
     );
+    try {
+      await _syncLogRepository?.logAction(
+        actionType: 'CASH_DRAWER',
+        title: isPaidIn ? 'Cash Paid In' : 'Cash Paid Out',
+        details:
+            'Cashier: $cashierName | Amount: ${CurrencyFormatter.formatWithSymbol(amount)} | Reason: $reason',
+        status: 'SUCCESS',
+      );
+    } catch (_) {}
     await checkActiveSession();
   }
 
@@ -256,6 +265,16 @@ class ShiftServiceImpl implements ShiftService {
     );
 
     _activeShift.value = null;
+
+    try {
+      await _syncLogRepository?.logAction(
+        actionType: 'SHIFT_EVENT',
+        title: 'Shift Ended (Shift #${closedShift.shiftNumber})',
+        details:
+            'Day #${currentDay?.dayNumber ?? 1} | Cashier: ${user.displayName} | Invoices: ${stats.totalInvoices} | Net Sales: ${CurrencyFormatter.formatWithSymbol(stats.grandTotalSales)} | Expected Cash: ${CurrencyFormatter.formatWithSymbol(stats.expectedCash)} | Actual Cash: ${CurrencyFormatter.formatWithSymbol(actualClosingCash)} | Diff: ${CurrencyFormatter.formatWithSymbol(closedShift.cashDifference)}',
+        status: 'SUCCESS',
+      );
+    } catch (_) {}
 
     if (performDayEnd && currentDay != null) {
       final dayStats = await _repository.getDayStats(currentDay);
