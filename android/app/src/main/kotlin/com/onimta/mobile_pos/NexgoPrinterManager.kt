@@ -115,6 +115,121 @@ class NexgoPrinterManager(private val context: Context) {
         }
     }
 
+    private fun wrapText(text: String, maxChars: Int): List<String> {
+        if (text.length <= maxChars) return listOf(text)
+        val words = text.split(" ")
+        val result = mutableListOf<String>()
+        var cur = StringBuilder()
+        for (w in words) {
+            if (cur.isEmpty()) {
+                cur.append(w)
+            } else if (cur.length + 1 + w.length <= maxChars) {
+                cur.append(" ").append(w)
+            } else {
+                result.add(cur.toString())
+                cur = StringBuilder(w)
+            }
+        }
+        if (cur.isNotEmpty()) result.add(cur.toString())
+        return result
+    }
+
+    private fun printDivider(
+        p: Any,
+        pClass: Class<*>,
+        isDouble: Boolean = false,
+        alignCenter: Any? = null,
+        printFallback: ((String, Int, Any?, Boolean) -> Unit)? = null
+    ) {
+        try {
+            val h = if (isDouble) 18 else 14
+            val bmp = Bitmap.createBitmap(384, h, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            canvas.drawColor(Color.WHITE)
+            val paint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (isDouble) 3.0f else 3.5f
+                isAntiAlias = false
+            }
+            val leftX = 4f
+            val rightX = 380f
+            val y = h / 2f
+            if (isDouble) {
+                canvas.drawLine(leftX, y - 3.5f, rightX, y - 3.5f, paint)
+                canvas.drawLine(leftX, y + 3.5f, rightX, y + 3.5f, paint)
+            } else {
+                canvas.drawLine(leftX, y, rightX, y, paint)
+            }
+            val appendImageMethod = pClass.methods.firstOrNull { it.name == "appendImage" }
+            if (appendImageMethod != null) {
+                val pTypes = appendImageMethod.parameterTypes
+                if (pTypes.size == 1 && pTypes[0] == Bitmap::class.java) {
+                    appendImageMethod.invoke(p, bmp)
+                    return
+                } else if (pTypes.size >= 2 && pTypes[0] == Bitmap::class.java) {
+                    appendImageMethod.invoke(p, bmp, alignCenter)
+                    return
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "printDivider error: ${e.message}")
+        }
+        val char = if (isDouble) "=" else "-"
+        printFallback?.invoke(char.repeat(32), 24, alignCenter, true)
+    }
+
+    private fun printReceiptHeader(
+        receiptData: Map<String, Any?>,
+        title: String,
+        printLine: (String, Int, Any?, Boolean) -> Unit,
+        alignCenter: Any?
+    ) {
+        val storeNameRaw = (receiptData["storeName"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: (receiptData["appName"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "ONIMTA POS"
+        val storeAddress = (receiptData["storeAddress"] as? String)?.trim() ?: ""
+        val storePhone = (receiptData["storePhone"] as? String)?.trim() ?: ""
+
+        val normalizedStoreName = storeNameRaw.replace("\\n", "\n")
+        val nameLines = normalizedStoreName.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+
+        if (nameLines.isNotEmpty()) {
+            val firstLine = nameLines[0].uppercase()
+            val bigSize = if (firstLine.length <= 12) 44 else if (firstLine.length <= 18) 38 else 32
+            printLine(firstLine, bigSize, alignCenter, true)
+
+            for (i in 1 until nameLines.size) {
+                printLine(nameLines[i].uppercase(), 24, alignCenter, true)
+            }
+        }
+
+        if (storeAddress.isNotEmpty()) {
+            val normalizedAddr = storeAddress.replace("\\n", "\n")
+            val addrLines = normalizedAddr.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            for (addrLine in addrLines) {
+                val wrapped = wrapText(addrLine, 32)
+                for (wl in wrapped) {
+                    printLine(wl, 20, alignCenter, false)
+                }
+            }
+        }
+
+        if (storePhone.isNotEmpty()) {
+            val phoneText = if (storePhone.uppercase().startsWith("TEL") || storePhone.uppercase().startsWith("PHONE")) {
+                storePhone
+            } else {
+                "TEL: $storePhone"
+            }
+            printLine(phoneText, 20, alignCenter, false)
+        }
+
+        if (title.isNotEmpty()) {
+            printLine(title, 22, alignCenter, true)
+        }
+        printLine("--------------------------------", 20, alignCenter, false)
+    }
+
     fun printReceipt(
         receiptData: Map<String, Any?>,
         onComplete: (Boolean, String?) -> Unit
@@ -160,6 +275,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -175,15 +301,12 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             // Header Info
-            val appName = (receiptData["appName"] as? String ?: "ONIMTA POS").uppercase()
             val invoiceNo = (receiptData["invoiceNo"] as? String ?: "").uppercase()
             val customerName = (receiptData["customerName"] as? String ?: "WALK-IN CUSTOMER").uppercase()
             val cashierName = (receiptData["cashierName"] as? String ?: "ADMIN").uppercase()
             val dateStr = receiptData["dateTime"] as? String ?: ""
 
-            printLine(appName, 28, alignCenter, true)
-            printLine("ORDER INVOICE", 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(receiptData, "ORDER INVOICE", ::printLine, alignCenter)
 
             printTwoCols("INVOICE #:", invoiceNo, 22, true)
             if (dateStr.isNotEmpty()) {
@@ -379,6 +502,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -400,9 +534,7 @@ class NexgoPrinterManager(private val context: Context) {
             val cashier = (movementData["cashier"] as? String ?: "Admin").uppercase()
             val dateStr = movementData["dateTime"] as? String ?: ""
 
-            printLine(appName, 28, alignCenter, true)
-            printLine("*** $type RECEIPT ***", 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(movementData, "*** $type RECEIPT ***", ::printLine, alignCenter)
 
             if (dateStr.isNotEmpty()) {
                 printTwoCols("DATE:", dateStr, 20, false)
@@ -500,6 +632,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -523,9 +666,7 @@ class NexgoPrinterManager(private val context: Context) {
             val openedAt = reportData["openedAt"] as? String ?: ""
             val isEndReport = reportData["isEndReport"] as? Boolean ?: false
 
-            printLine(appName, 28, alignCenter, true)
-            printLine(title, 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(reportData, title, ::printLine, alignCenter)
 
             printTwoCols("DAY #:", dayNumber, 20, true)
             printTwoCols("SHIFT #:", shiftNumber, 20, true)
@@ -698,6 +839,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -720,9 +872,7 @@ class NexgoPrinterManager(private val context: Context) {
             val dateTime = exchangeData["dateTime"] as? String ?: ""
             val items = exchangeData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
-            printLine(appName, 28, alignCenter, true)
-            printLine("EXCHANGE VOUCHER / SLIP", 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(exchangeData, "EXCHANGE VOUCHER / SLIP", ::printLine, alignCenter)
 
             printTwoCols("VOUCHER #:", voucherCode, 24, true)
             printTwoCols("DATE:", dateTime, 20, false)
@@ -867,6 +1017,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -891,9 +1052,7 @@ class NexgoPrinterManager(private val context: Context) {
             val dateTime = returnData["dateTime"] as? String ?: ""
             val items = returnData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
-            printLine(appName, 28, alignCenter, true)
-            printLine("RETURN / REFUND RECEIPT", 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(returnData, "RETURN / REFUND RECEIPT", ::printLine, alignCenter)
 
             printTwoCols("RETURN REF #:", returnNo, 22, true)
             printTwoCols("DATE:", dateTime, 20, false)
@@ -1002,6 +1161,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -1025,9 +1195,7 @@ class NexgoPrinterManager(private val context: Context) {
             val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
             val items = reportData["items"] as? List<Map<String, Any?>> ?: emptyList()
 
-            printLine(appName, 28, alignCenter, true)
-            printLine(title, 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(reportData, title, ::printLine, alignCenter)
 
             printTwoCols("PERIOD:", period, 20, false)
             printTwoCols("CASHIER:", cashier, 20, false)
@@ -1126,6 +1294,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -1165,9 +1344,7 @@ class NexgoPrinterManager(private val context: Context) {
             val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
             val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
 
-            printLine(appName, 28, alignCenter, true)
-            printLine(title, 22, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(reportData, title, ::printLine, alignCenter)
 
             printTwoCols("PERIOD:", period, 20, false)
             printTwoCols("CASHIER:", cashier, 20, false)
@@ -1285,6 +1462,17 @@ class NexgoPrinterManager(private val context: Context) {
             }
 
             fun printLine(text: String, size: Int = 22, align: Any? = alignLeft, bold: Boolean = false) {
+                if (text == "--------------------------------" || text == "-".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, false, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                } else if (text == "================================" || text == "=".repeat(32)) {
+                    this@NexgoPrinterManager.printDivider(p, pClass, true, alignCenter) { t: String, s: Int, a: Any?, b: Boolean ->
+                        appendTextMethod.invoke(p, t, s, a ?: alignLeft, b)
+                    }
+                    return
+                }
                 appendTextMethod.invoke(p, text, size, align ?: alignLeft, bold)
             }
 
@@ -1299,7 +1487,6 @@ class NexgoPrinterManager(private val context: Context) {
                 }
             }
 
-            val appName = (holdData["appName"] as? String ?: "ONIMTA POS").uppercase()
             val holdNo = holdData["holdNo"] as? String ?: ""
             val totalAmount = holdData["totalAmount"] as? String ?: "LKR 0.00"
             val totalItems = (holdData["totalItems"] as? String ?: "0 items").uppercase()
@@ -1307,9 +1494,7 @@ class NexgoPrinterManager(private val context: Context) {
             val cashierName = (holdData["cashierName"] as? String ?: "Admin").uppercase()
             val dateTime = holdData["dateTime"] as? String ?: ""
 
-            printLine(appName, 28, alignCenter, true)
-            printLine("*** HELD BILL RECEIPT ***", 24, alignCenter, true)
-            printLine("--------------------------------", 20, alignCenter, false)
+            printReceiptHeader(holdData, "*** HELD BILL RECEIPT ***", ::printLine, alignCenter)
 
             printTwoCols("HOLD BILL #:", holdNo, 24, true)
             printTwoCols("DATE:", dateTime, 20, false)

@@ -293,6 +293,10 @@ class Wpos3PrinterManager(private val context: Context) {
                         Log.w(TAG, "printInit/clear error: ${e.message}")
                     }
 
+                    val storeName = (receiptData["storeName"] as? String)?.trim() ?: ""
+                    val storeAddress = (receiptData["storeAddress"] as? String)?.trim() ?: ""
+                    val storePhone = (receiptData["storePhone"] as? String)?.trim() ?: ""
+
                     // 2. Try High-Resolution Bitmap Print first
                     val bitmap = renderReceiptBitmap(
                         appName = appName,
@@ -308,7 +312,10 @@ class Wpos3PrinterManager(private val context: Context) {
                         grandTotal = grandTotal,
                         payments = payments,
                         totalPaid = totalPaid,
-                        change = change
+                        change = change,
+                        storeName = storeName,
+                        storeAddress = storeAddress,
+                        storePhone = storePhone
                     )
 
                     var bitmapSuccess = false
@@ -350,18 +357,56 @@ class Wpos3PrinterManager(private val context: Context) {
                             pLine(left + " ".repeat(pad) + right, size, 0, bold)
                         }
 
-                        pLine(appName, 28, 1, true)
-                        pLine("TAX INVOICE RECEIPT", 20, 1, false)
-                        pLine("--------------------------------", 18, 1, false)
+                        fun pDivider(isDouble: Boolean = false) {
+                            val char = if (isDouble) "=" else "-"
+                            pLine(char.repeat(32), 24, 1, true)
+                        }
+
+                        val storeNameRaw = storeName.ifBlank { appName }
+                        val normalizedStoreName = storeNameRaw.replace("\\n", "\n")
+                        val nameLines = normalizedStoreName.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+
+                        if (nameLines.isNotEmpty()) {
+                            val firstLine = nameLines[0].uppercase()
+                            val bigSize = if (firstLine.length <= 12) 42 else if (firstLine.length <= 18) 36 else 30
+                            pLine(firstLine, bigSize, 1, true)
+
+                            for (i in 1 until nameLines.size) {
+                                pLine(nameLines[i].uppercase(), 24, 1, true)
+                            }
+                        }
+
+                        if (storeAddress.isNotEmpty()) {
+                            val normalizedAddr = storeAddress.replace("\\n", "\n")
+                            val addrLines = normalizedAddr.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                            for (addrLine in addrLines) {
+                                val wrapped = wrapText(addrLine, 32)
+                                for (wl in wrapped) {
+                                    pLine(wl, 20, 1, false)
+                                }
+                            }
+                        }
+
+                        if (storePhone.isNotEmpty()) {
+                            val phoneText = if (storePhone.uppercase().startsWith("TEL") || storePhone.uppercase().startsWith("PHONE")) {
+                                storePhone
+                            } else {
+                                "TEL: $storePhone"
+                            }
+                            pLine(phoneText, 20, 1, false)
+                        }
+
+                        pLine("ORDER INVOICE", 20, 1, true)
+                        pDivider(false)
 
                         pTwoCols("INVOICE #:", invoiceNo, 20, true)
                         if (dateStr.isNotEmpty()) pTwoCols("DATE:", dateStr, 18, false)
                         pTwoCols("CASHIER:", cashierName, 18, false)
                         pTwoCols("CUSTOMER:", customerName, 18, false)
-                        pLine("--------------------------------", 18, 1, false)
+                        pDivider(false)
 
                         pTwoCols("LN  PRODUCT", String.format("%9s %4s %9s", "PRICE", "QTY", "TOTAL"), 18, true)
-                        pLine("--------------------------------", 18, 1, false)
+                        pDivider(false)
 
                         var lineNum = 1
                         for (item in items) {
@@ -407,7 +452,7 @@ class Wpos3PrinterManager(private val context: Context) {
                             }
                             lineNum++
                         }
-                        pLine("--------------------------------", 18, 1, false)
+                        pDivider(false)
 
                         pTwoCols("SUBTOTAL:", subtotal, 20, false)
                         if (discount.isNotEmpty() && discount != "LKR 0.00" && discount != "0.00") {
@@ -416,9 +461,9 @@ class Wpos3PrinterManager(private val context: Context) {
                         if (tax.isNotEmpty() && tax != "LKR 0.00" && tax != "0.00") {
                             pTwoCols("TAX:", tax, 20, false)
                         }
-                        pLine("--------------------------------", 18, 1, false)
+                        pDivider(true)
                         pTwoCols("GRAND TOTAL:", grandTotal, 28, true)
-                        pLine("--------------------------------", 18, 1, false)
+                        pDivider(true)
 
                         if (payments.isNotEmpty()) {
                             for (p in payments) {
@@ -433,7 +478,7 @@ class Wpos3PrinterManager(private val context: Context) {
                             pTwoCols("CHANGE RETURNED:", change, 22, true)
                         }
 
-                        pLine("--------------------------------", 18, 1, false)
+                        pDivider(false)
                         pLine("THANK YOU FOR SHOPPING!", 18, 1, true)
                         pLine("PLEASE COME AGAIN", 16, 1, false)
                     }
@@ -487,14 +532,7 @@ class Wpos3PrinterManager(private val context: Context) {
                         clearCacheMethod?.invoke(target)
                     } catch (_: Throwable) {}
 
-                    val bitmap = renderCashMovementBitmap(
-                        appName = appName,
-                        type = type,
-                        amount = amount,
-                        reason = reason,
-                        cashier = cashier,
-                        dateTime = dateTime
-                    )
+                    val bitmap = renderCashMovementBitmap(movementData)
 
                     if (printPictureMethod != null) {
                         try {
@@ -677,6 +715,118 @@ class Wpos3PrinterManager(private val context: Context) {
     // 58mm (384px width) Bitmap Rendering Engine
     // ==========================================
 
+    private fun wrapText(text: String, maxChars: Int): List<String> {
+        if (text.length <= maxChars) return listOf(text)
+        val words = text.split(" ")
+        val result = mutableListOf<String>()
+        var cur = StringBuilder()
+        for (w in words) {
+            if (cur.isEmpty()) {
+                cur.append(w)
+            } else if (cur.length + 1 + w.length <= maxChars) {
+                cur.append(" ").append(w)
+            } else {
+                result.add(cur.toString())
+                cur = StringBuilder(w)
+            }
+        }
+        if (cur.isNotEmpty()) result.add(cur.toString())
+        return result
+    }
+
+    private fun calculateStoreNameSize(text: String, maxWidth: Int, max: Float = 46f, min: Float = 28f): Float {
+        val testPaint = Paint().apply {
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        var s = max
+        while (s >= min) {
+            testPaint.textSize = s
+            if (testPaint.measureText(text) <= maxWidth) {
+                return s
+            }
+            s -= 2f
+        }
+        return min
+    }
+
+    private fun drawBitmapHeader(
+        canvas: Canvas,
+        paint: Paint,
+        data: Map<String, Any?>,
+        title: String,
+        width: Int,
+        startY: Float,
+        onYUpdated: (Float) -> Unit
+    ) {
+        var y = startY
+        fun drawCenter(text: String, size: Float, bold: Boolean = false) {
+            paint.textSize = size
+            paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(text, width / 2f, y, paint)
+            y += size + 8f
+        }
+
+        fun drawDivider() {
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = 3.5f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
+        }
+
+        val storeNameRaw = (data["storeName"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: (data["appName"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "ONIMTA POS"
+        val addrRaw = (data["storeAddress"] as? String)?.trim() ?: ""
+        val phoneRaw = (data["storePhone"] as? String)?.trim() ?: ""
+
+        val normalizedStoreName = storeNameRaw.replace("\\n", "\n")
+        val nameLines = normalizedStoreName.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+
+        if (nameLines.isNotEmpty()) {
+            val firstLine = nameLines[0].uppercase()
+            val bigSize = calculateStoreNameSize(firstLine, width - 24, max = 46f, min = 28f)
+            drawCenter(firstLine, bigSize, true)
+
+            for (i in 1 until nameLines.size) {
+                drawCenter(nameLines[i].uppercase(), 24f, true)
+            }
+        }
+
+        if (addrRaw.isNotEmpty()) {
+            val normalizedAddr = addrRaw.replace("\\n", "\n")
+            val addrLines = normalizedAddr.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            for (addrLine in addrLines) {
+                val wrapped = wrapText(addrLine, 32)
+                for (wl in wrapped) {
+                    drawCenter(wl, 19f, false)
+                }
+            }
+        }
+
+        if (phoneRaw.isNotEmpty()) {
+            val phoneText = if (phoneRaw.uppercase().startsWith("TEL") || phoneRaw.uppercase().startsWith("PHONE")) {
+                phoneRaw
+            } else {
+                "TEL: $phoneRaw"
+            }
+            drawCenter(phoneText, 19f, false)
+        }
+
+        if (title.isNotEmpty()) {
+            drawCenter(title, 20f, true)
+        }
+        drawDivider()
+        onYUpdated(y)
+    }
+
     private fun renderReceiptBitmap(
         appName: String,
         invoiceNo: String,
@@ -691,10 +841,13 @@ class Wpos3PrinterManager(private val context: Context) {
         grandTotal: String,
         payments: List<Map<String, Any?>>,
         totalPaid: String,
-        change: String
+        change: String,
+        storeName: String = "",
+        storeAddress: String = "",
+        storePhone: String = ""
     ): Bitmap {
         val width = 384
-        val estimatedHeight = 550 + (items.size * 60) + (payments.size * 30)
+        val estimatedHeight = 650 + (items.size * 60) + (payments.size * 30)
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -715,12 +868,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -754,9 +912,13 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        drawCenter(appName.uppercase(), 26f, true)
-        drawCenter("TAX INVOICE RECEIPT", 19f, true)
-        drawDivider(false)
+        val headerData = mapOf(
+            "storeName" to storeName,
+            "appName" to appName,
+            "storeAddress" to storeAddress,
+            "storePhone" to storePhone
+        )
+        drawBitmapHeader(canvas, paint, headerData, "ORDER INVOICE", width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("INVOICE #:", invoiceNo, 20f, true)
         if (dateStr.isNotEmpty()) drawTwoCols("DATE:", dateStr, 18f, false)
@@ -835,16 +997,9 @@ class Wpos3PrinterManager(private val context: Context) {
         return Bitmap.createBitmap(bitmap, 0, 0, width, y.toInt().coerceAtLeast(100))
     }
 
-    private fun renderCashMovementBitmap(
-        appName: String,
-        type: String,
-        amount: String,
-        reason: String,
-        cashier: String,
-        dateTime: String
-    ): Bitmap {
+    private fun renderCashMovementBitmap(movementData: Map<String, Any?>): Bitmap {
         val width = 384
-        val estimatedHeight = 460
+        val estimatedHeight = 560
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -865,12 +1020,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -883,9 +1043,13 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        drawCenter(appName.uppercase(), 26f, true)
-        drawCenter(type.uppercase(), 20f, true)
-        drawDivider(false)
+        val type = (movementData["type"] as? String ?: "PAID IN").uppercase()
+        val amount = movementData["amount"] as? String ?: "LKR 0.00"
+        val reason = (movementData["reason"] as? String ?: "").uppercase()
+        val cashier = (movementData["cashier"] as? String ?: "Admin").uppercase()
+        val dateTime = movementData["dateTime"] as? String ?: ""
+
+        drawBitmapHeader(canvas, paint, movementData, "*** $type RECEIPT ***", width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("TOTAL $type:", amount, 24f, true)
         drawTwoCols("REASON / REMARK:", reason.uppercase(), 18f, false)
@@ -903,7 +1067,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
     private fun renderShiftReportBitmap(reportData: Map<String, Any?>): Bitmap {
         val width = 384
-        val estimatedHeight = 700
+        val estimatedHeight = 850
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -924,12 +1088,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -942,7 +1111,6 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val title = (reportData["title"] as? String ?: "SHIFT REPORT").uppercase()
         val dayNumber = reportData["dayNumber"] as? String ?: ""
         val shiftNumber = reportData["shiftNumber"] as? String ?: ""
@@ -951,9 +1119,7 @@ class Wpos3PrinterManager(private val context: Context) {
         val openingBalance = reportData["openingBalance"] as? String ?: ""
         val dateTime = reportData["dateTime"] as? String ?: ""
 
-        drawCenter(appName, 26f, true)
-        drawCenter(title, 22f, true)
-        drawDivider(false)
+        drawBitmapHeader(canvas, paint, reportData, title, width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("BUSINESS DAY:", dayNumber, 19f, true)
         drawTwoCols("SHIFT #:", shiftNumber, 19f, true)
@@ -1017,7 +1183,7 @@ class Wpos3PrinterManager(private val context: Context) {
     private fun renderExchangeBitmap(exchangeData: Map<String, Any?>): Bitmap {
         val width = 384
         val items = exchangeData["items"] as? List<Map<String, Any?>> ?: emptyList()
-        val estimatedHeight = 550 + (items.size * 55)
+        val estimatedHeight = 650 + (items.size * 55)
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -1038,12 +1204,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -1077,16 +1248,13 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = (exchangeData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val voucherCode = exchangeData["voucherCode"] as? String ?: ""
         val totalAmount = exchangeData["totalAmount"] as? String ?: "LKR 0.00"
         val customerName = (exchangeData["customerName"] as? String ?: "Walk-in Customer").uppercase()
         val cashierName = (exchangeData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = exchangeData["dateTime"] as? String ?: ""
 
-        drawCenter(appName, 26f, true)
-        drawCenter("EXCHANGE VOUCHER / SLIP", 20f, true)
-        drawDivider(false)
+        drawBitmapHeader(canvas, paint, exchangeData, "EXCHANGE VOUCHER / SLIP", width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("VOUCHER #:", voucherCode, 22f, true)
         drawTwoCols("DATE:", dateTime, 18f, false)
@@ -1158,7 +1326,7 @@ class Wpos3PrinterManager(private val context: Context) {
     private fun renderReturnBitmap(returnData: Map<String, Any?>): Bitmap {
         val width = 384
         val items = returnData["items"] as? List<Map<String, Any?>> ?: emptyList()
-        val estimatedHeight = 550 + (items.size * 55)
+        val estimatedHeight = 650 + (items.size * 55)
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -1179,12 +1347,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -1218,7 +1391,6 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = (returnData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val returnNo = returnData["returnNo"] as? String ?: ""
         val refundAmount = returnData["refundAmount"] as? String ?: "LKR 0.00"
         val paymentMethod = (returnData["paymentMethod"] as? String ?: "CASH").uppercase()
@@ -1227,9 +1399,7 @@ class Wpos3PrinterManager(private val context: Context) {
         val cashierName = (returnData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = returnData["dateTime"] as? String ?: ""
 
-        drawCenter(appName, 26f, true)
-        drawCenter("RETURN / REFUND RECEIPT", 20f, true)
-        drawDivider(false)
+        drawBitmapHeader(canvas, paint, returnData, "RETURN / REFUND RECEIPT", width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("RETURN REF #:", returnNo, 20f, true)
         drawTwoCols("DATE:", dateTime, 18f, false)
@@ -1339,7 +1509,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
     private fun renderHoldBitmap(holdData: Map<String, Any?>): Bitmap {
         val width = 384
-        val estimatedHeight = 520
+        val estimatedHeight = 620
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -1360,12 +1530,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -1386,9 +1561,7 @@ class Wpos3PrinterManager(private val context: Context) {
         val cashierName = (holdData["cashierName"] as? String ?: "Admin").uppercase()
         val dateTime = holdData["dateTime"] as? String ?: ""
 
-        drawCenter(appName, 26f, true)
-        drawCenter("*** HELD BILL RECEIPT ***", 22f, true)
-        drawDivider(false)
+        drawBitmapHeader(canvas, paint, holdData, "*** HELD BILL RECEIPT ***", width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("HOLD BILL #:", holdNo, 22f, true)
         drawTwoCols("DATE:", dateTime, 18f, false)
@@ -1520,7 +1693,7 @@ class Wpos3PrinterManager(private val context: Context) {
     private fun renderItemWiseReportBitmap(reportData: Map<String, Any?>): Bitmap {
         val width = 384
         val items = reportData["items"] as? List<Map<String, Any?>> ?: emptyList()
-        val estimatedHeight = 450 + (items.size * 55)
+        val estimatedHeight = 650 + (items.size * 55)
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -1541,12 +1714,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -1559,7 +1737,6 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val title = (reportData["title"] as? String ?: "ITEM-WISE SALES REPORT").uppercase()
         val period = (reportData["period"] as? String ?: "TODAY").uppercase()
         val cashier = (reportData["cashierName"] as? String ?: "Admin").uppercase()
@@ -1567,9 +1744,7 @@ class Wpos3PrinterManager(private val context: Context) {
         val totalQty = reportData["totalQuantity"] as? String ?: "0"
         val totalRevenue = reportData["totalRevenue"] as? String ?: "LKR 0.00"
 
-        drawCenter(appName, 26f, true)
-        drawCenter(title, 20f, true)
-        drawDivider(false)
+        drawBitmapHeader(canvas, paint, reportData, title, width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("PERIOD:", period, 18f, false)
         drawTwoCols("CASHIER:", cashier, 18f, false)
@@ -1611,7 +1786,7 @@ class Wpos3PrinterManager(private val context: Context) {
 
     private fun renderTotalSalesReportBitmap(reportData: Map<String, Any?>): Bitmap {
         val width = 384
-        val estimatedHeight = 650
+        val estimatedHeight = 900
         val bitmap = Bitmap.createBitmap(width, estimatedHeight, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -1632,12 +1807,17 @@ class Wpos3PrinterManager(private val context: Context) {
         }
 
         fun drawDivider(dotted: Boolean = true) {
-            paint.textSize = 16f
-            paint.typeface = Typeface.MONOSPACE
-            paint.textAlign = Paint.Align.CENTER
-            val line = if (dotted) "- - - - - - - - - - - - - - - - - -" else "-----------------------------------"
-            canvas.drawText(line, width / 2f, y, paint)
-            y += 22f
+            val linePaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = if (dotted) 3.0f else 4.0f
+                isAntiAlias = false
+            }
+            val leftX = 10f
+            val rightX = (width - 10).toFloat()
+            val lineY = y - 4f
+            canvas.drawLine(leftX, lineY, rightX, lineY, linePaint)
+            y += 20f
         }
 
         fun drawTwoCols(left: String, right: String, size: Float = 20f, bold: Boolean = false) {
@@ -1650,7 +1830,6 @@ class Wpos3PrinterManager(private val context: Context) {
             y += size + 8f
         }
 
-        val appName = (reportData["appName"] as? String ?: "ONIMTA POS").uppercase()
         val title = (reportData["title"] as? String ?: "TOTAL SALES REPORT").uppercase()
         val period = (reportData["period"] as? String ?: "TODAY").uppercase()
         val cashier = (reportData["cashierName"] as? String ?: "Admin").uppercase()
@@ -1675,9 +1854,7 @@ class Wpos3PrinterManager(private val context: Context) {
         val qrSales = reportData["qrSales"] as? String ?: "LKR 0.00"
         val creditSales = reportData["creditSales"] as? String ?: "LKR 0.00"
 
-        drawCenter(appName, 28f, true)
-        drawCenter(title, 22f, true)
-        drawDivider(false)
+        drawBitmapHeader(canvas, paint, reportData, title, width, y) { updatedY -> y = updatedY }
 
         drawTwoCols("PERIOD:", period, 18f, false)
         drawTwoCols("CASHIER:", cashier, 18f, false)

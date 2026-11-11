@@ -1,3 +1,4 @@
+import 'package:sqflite/sqflite.dart';
 import '../../../app/constants/database_constants.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../core/utils/payment_helper.dart';
@@ -107,11 +108,54 @@ class ShiftLocalDatasource {
     return Shift.fromMap(results.first);
   }
 
+  /// Retrieves the next sequential Shift Number, honoring any configured starting shift number
+  Future<int> getNextShiftNumber() async {
+    final db = await _dbHelper.database;
+    final settingRes = await db.query(
+      DatabaseConstants.tableSettings,
+      where: '${DatabaseConstants.colKey} = ?',
+      whereArgs: ['next_shift_number'],
+      limit: 1,
+    );
+    int? configuredNext;
+    if (settingRes.isNotEmpty) {
+      final val = settingRes.first[DatabaseConstants.colValue] as String?;
+      configuredNext = int.tryParse(val?.trim() ?? '');
+    }
+
+    final shiftMaxResult = await db.rawQuery(
+      'SELECT MAX(${DatabaseConstants.colShiftNumber}) as max_shift FROM ${DatabaseConstants.tableShifts}',
+    );
+    final int maxShift = ((shiftMaxResult.first['max_shift'] as num?)?.toInt() ?? 0);
+    final int calculatedNext = maxShift + 1;
+
+    if (configuredNext != null && configuredNext > maxShift) {
+      return configuredNext;
+    }
+    return calculatedNext > 0 ? calculatedNext : 1;
+  }
+
+  /// Manually sets the next Shift Number to start with
+  Future<void> setNextShiftNumber(int nextShiftNumber) async {
+    final db = await _dbHelper.database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      DatabaseConstants.tableSettings,
+      {
+        DatabaseConstants.colKey: 'next_shift_number',
+        DatabaseConstants.colValue: '$nextShiftNumber',
+        DatabaseConstants.colUpdatedAt: now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   /// Starts a brand new Business Day and its first Shift atomically
   Future<({BusinessDay day, Shift shift})> startDayAndShift({
     required double openingBalance,
     required String cashierUsername,
     required String cashierName,
+    int? customShiftNumber,
   }) async {
     final db = await _dbHelper.database;
     final now = DateTime.now().toIso8601String();
@@ -137,10 +181,30 @@ class ShiftLocalDatasource {
       };
       final dayId = await txn.insert(DatabaseConstants.tableBusinessDays, dayMap);
 
-      // 2. Create Shift 1 for this new day
+      // 2. Determine sequential Shift Number (either custom or max across all shifts + 1)
+      int shiftNum = customShiftNumber ?? 0;
+      if (shiftNum <= 0) {
+        final settingRes = await txn.query(
+          DatabaseConstants.tableSettings,
+          where: '${DatabaseConstants.colKey} = ?',
+          whereArgs: ['next_shift_number'],
+          limit: 1,
+        );
+        int? configuredNext;
+        if (settingRes.isNotEmpty) {
+          final val = settingRes.first[DatabaseConstants.colValue] as String?;
+          configuredNext = int.tryParse(val?.trim() ?? '');
+        }
+        final shiftMaxResult = await txn.rawQuery(
+          'SELECT MAX(${DatabaseConstants.colShiftNumber}) as max_shift FROM ${DatabaseConstants.tableShifts}',
+        );
+        final int maxShift = ((shiftMaxResult.first['max_shift'] as num?)?.toInt() ?? 0);
+        shiftNum = (configuredNext != null && configuredNext > maxShift) ? configuredNext : (maxShift + 1);
+      }
+
       final shiftMap = {
         DatabaseConstants.colDayId: dayId,
-        DatabaseConstants.colShiftNumber: 1,
+        DatabaseConstants.colShiftNumber: shiftNum,
         DatabaseConstants.colOpenedAt: now,
         DatabaseConstants.colClosedAt: null,
         DatabaseConstants.colCashierUsername: cashierUsername,
@@ -157,6 +221,17 @@ class ShiftLocalDatasource {
       };
       final shiftId = await txn.insert(DatabaseConstants.tableShifts, shiftMap);
 
+      // 3. Save next_shift_number into settings
+      await txn.insert(
+        DatabaseConstants.tableSettings,
+        {
+          DatabaseConstants.colKey: 'next_shift_number',
+          DatabaseConstants.colValue: '${shiftNum + 1}',
+          DatabaseConstants.colUpdatedAt: now,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
       return (
         day: BusinessDay.fromMap({...dayMap, DatabaseConstants.colId: dayId}),
         shift: Shift.fromMap({...shiftMap, DatabaseConstants.colId: shiftId}),
@@ -170,19 +245,34 @@ class ShiftLocalDatasource {
     required double openingBalance,
     required String cashierUsername,
     required String cashierName,
+    int? customShiftNumber,
   }) async {
     final db = await _dbHelper.database;
     final now = DateTime.now().toIso8601String();
 
-    final shiftMaxResult = await db.rawQuery(
-      'SELECT MAX(${DatabaseConstants.colShiftNumber}) as max_shift FROM ${DatabaseConstants.tableShifts} WHERE ${DatabaseConstants.colDayId} = ?',
-      [day.id],
-    );
-    final int nextShiftNum = ((shiftMaxResult.first['max_shift'] as num?)?.toInt() ?? 0) + 1;
+    int shiftNum = customShiftNumber ?? 0;
+    if (shiftNum <= 0) {
+      final settingRes = await db.query(
+        DatabaseConstants.tableSettings,
+        where: '${DatabaseConstants.colKey} = ?',
+        whereArgs: ['next_shift_number'],
+        limit: 1,
+      );
+      int? configuredNext;
+      if (settingRes.isNotEmpty) {
+        final val = settingRes.first[DatabaseConstants.colValue] as String?;
+        configuredNext = int.tryParse(val?.trim() ?? '');
+      }
+      final shiftMaxResult = await db.rawQuery(
+        'SELECT MAX(${DatabaseConstants.colShiftNumber}) as max_shift FROM ${DatabaseConstants.tableShifts}',
+      );
+      final int maxShift = ((shiftMaxResult.first['max_shift'] as num?)?.toInt() ?? 0);
+      shiftNum = (configuredNext != null && configuredNext > maxShift) ? configuredNext : (maxShift + 1);
+    }
 
     final shiftMap = {
       DatabaseConstants.colDayId: day.id,
-      DatabaseConstants.colShiftNumber: nextShiftNum,
+      DatabaseConstants.colShiftNumber: shiftNum,
       DatabaseConstants.colOpenedAt: now,
       DatabaseConstants.colClosedAt: null,
       DatabaseConstants.colCashierUsername: cashierUsername,
@@ -198,6 +288,17 @@ class ShiftLocalDatasource {
       DatabaseConstants.colStatus: 'OPEN',
     };
     final shiftId = await db.insert(DatabaseConstants.tableShifts, shiftMap);
+
+    await db.insert(
+      DatabaseConstants.tableSettings,
+      {
+        DatabaseConstants.colKey: 'next_shift_number',
+        DatabaseConstants.colValue: '${shiftNum + 1}',
+        DatabaseConstants.colUpdatedAt: now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
     return Shift.fromMap({...shiftMap, DatabaseConstants.colId: shiftId});
   }
 

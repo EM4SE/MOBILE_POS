@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import '../../app/constants/app_constants.dart';
+import '../../app/constants/database_constants.dart';
+import '../../core/services/database_service.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/models/sale_model.dart';
 
@@ -16,6 +18,44 @@ class PrinterResult {
 /// Service interfacing with the NEXGO N5 Inbuilt Thermal Printer
 class PrinterService {
   static const MethodChannel _channel = MethodChannel('com.onimta.mobile_pos/printer');
+
+  /// Retrieve configured Store Name, Address, and Phone from POS settings database
+  static Future<Map<String, String>> getStoreInfo() async {
+    try {
+      final dbService = DatabaseServiceImpl();
+      final results = await dbService.query(DatabaseConstants.tableSettings);
+      final map = <String, String>{};
+      for (final row in results) {
+        final key = row[DatabaseConstants.colKey] as String?;
+        final val = row[DatabaseConstants.colValue] as String?;
+        if (key != null && val != null) {
+          map[key] = val;
+        }
+      }
+      final name = (map['store_name']?.trim().isNotEmpty == true)
+          ? map['store_name']!.trim()
+          : (map['app_name']?.trim().isNotEmpty == true)
+              ? map['app_name']!.trim()
+              : AppConstants.appName;
+      return {
+        'appName': name,
+        'storeName': name,
+        'storeAddress': (map['store_address']?.trim().isNotEmpty == true)
+            ? map['store_address']!.trim()
+            : '',
+        'storePhone': (map['store_phone']?.trim().isNotEmpty == true)
+            ? map['store_phone']!.trim()
+            : '',
+      };
+    } catch (_) {
+      return {
+        'appName': AppConstants.appName,
+        'storeName': AppConstants.appName,
+        'storeAddress': '',
+        'storePhone': '',
+      };
+    }
+  }
 
   static Future<bool> isPrinterAvailable() async {
     try {
@@ -55,8 +95,20 @@ class PrinterService {
     }
   }
 
-  static Future<PrinterResult> printReceipt(Sale sale) async {
+  static Future<PrinterResult> printReceipt(
+    Sale sale, {
+    String? storeName,
+    String? storeAddress,
+    String? storePhone,
+  }) async {
     try {
+      if (storeName == null || storeAddress == null || storePhone == null) {
+        final storeInfo = await getStoreInfo();
+        storeName ??= storeInfo['storeName'];
+        storeAddress ??= storeInfo['storeAddress'];
+        storePhone ??= storeInfo['storePhone'];
+      }
+
       // Decode payments
       final List<Map<String, String>> paymentsList = [];
       if (sale.paymentMethod.startsWith('[')) {
@@ -92,8 +144,12 @@ class PrinterService {
       }).toList();
 
       final exchangeCredit = (sale.subtotal - sale.discount + sale.tax - sale.grandTotal).clamp(0.0, double.infinity);
+      final resolvedName = storeName ?? AppConstants.appName;
       final receiptData = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': resolvedName,
+        'storeName': resolvedName,
+        'storeAddress': storeAddress ?? '',
+        'storePhone': storePhone ?? '',
         'invoiceNo': sale.invoiceNo.toUpperCase(),
         'customerName': sale.customerName.toUpperCase(),
         'cashierName': sale.cashierName.toUpperCase(),
@@ -126,8 +182,12 @@ class PrinterService {
     String? dateTime,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'type': isPaidIn ? 'PAID IN (CASH ENTRY)' : 'PAID OUT (CASH EXPENSE)',
         'amount': CurrencyFormatter.formatWithSymbol(amount),
         'reason': reason.toUpperCase(),
@@ -171,8 +231,12 @@ class PrinterService {
     double cashDiff = 0.0,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'title': title.toUpperCase(),
         'dayNumber': '#$dayNumber',
         'shiftNumber': '#$shiftNumber',
@@ -221,6 +285,7 @@ class PrinterService {
     String? dateTime,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final itemsPayload = items.map((item) {
         final qty = (item['quantity'] as num?)?.toDouble() ?? 1.0;
         final price = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
@@ -234,7 +299,10 @@ class PrinterService {
       }).toList();
 
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'voucherCode': voucherCode.toUpperCase(),
         'totalAmount': CurrencyFormatter.formatWithSymbol(totalAmount),
         'customerName': (customerName ?? 'Walk-in Customer').toUpperCase(),
@@ -264,6 +332,7 @@ class PrinterService {
     String? dateTime,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final itemsPayload = items.map((item) {
         final qty = (item['quantity'] as num?)?.toDouble() ?? 1.0;
         final price = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
@@ -277,7 +346,10 @@ class PrinterService {
       }).toList();
 
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'returnNo': returnNo.toUpperCase(),
         'refundAmount': CurrencyFormatter.formatWithSymbol(refundAmount),
         'paymentMethod': paymentMethod.toUpperCase(),
@@ -308,6 +380,7 @@ class PrinterService {
     String? dateTime,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final itemsPayload = items.map((item) {
         final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
         final total = (item['totalAmount'] as num?)?.toDouble() ?? 0.0;
@@ -319,7 +392,10 @@ class PrinterService {
       }).toList();
 
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'title': title.toUpperCase(),
         'period': period.toUpperCase(),
         'cashierName': cashierName.toUpperCase(),
@@ -360,8 +436,12 @@ class PrinterService {
     String? dateTime,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'title': title.toUpperCase(),
         'period': period.toUpperCase(),
         'cashierName': cashierName.toUpperCase(),
@@ -402,8 +482,12 @@ class PrinterService {
     String? dateTime,
   }) async {
     try {
+      final storeInfo = await getStoreInfo();
       final payload = {
-        'appName': AppConstants.appName.toUpperCase(),
+        'appName': storeInfo['appName'] ?? AppConstants.appName,
+        'storeName': storeInfo['storeName'] ?? AppConstants.appName,
+        'storeAddress': storeInfo['storeAddress'] ?? '',
+        'storePhone': storeInfo['storePhone'] ?? '',
         'holdNo': holdNo.toUpperCase(),
         'totalAmount': CurrencyFormatter.formatWithSymbol(totalAmount),
         'totalItems': '$totalItemsCount LINES (${CurrencyFormatter.formatQuantity(totalQuantity)} ITEMS)',

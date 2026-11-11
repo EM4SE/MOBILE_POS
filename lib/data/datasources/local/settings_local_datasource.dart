@@ -1,3 +1,4 @@
+import 'package:sqflite/sqflite.dart';
 import '../../../app/constants/database_constants.dart';
 import '../../../core/services/database_service.dart';
 import '../../models/pos_setting_model.dart';
@@ -52,6 +53,7 @@ class SettingsLocalDataSourceImpl implements SettingsLocalDataSource {
         await txn.insert(
           DatabaseConstants.tableSettings,
           setting.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
     });

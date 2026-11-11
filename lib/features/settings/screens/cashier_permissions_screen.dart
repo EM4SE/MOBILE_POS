@@ -65,6 +65,24 @@ class _CashierPermissionsScreenState extends State<CashierPermissionsScreen> {
     }
   }
 
+  Future<void> _syncCashiers() async {
+    FeedbackHelper.vibrate();
+    setState(() => _isLoadingUsers = true);
+    try {
+      final synced = await widget.authService.syncCashiersFromApi();
+      if (!mounted) return;
+      AppDialog.showSnackBar(
+        context,
+        'Synced ${synced.length} cashiers from ERP successfully',
+      );
+      await _loadCashiers();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingUsers = false);
+      AppDialog.showSnackBar(context, 'Sync failed: $e');
+    }
+  }
+
   Future<void> _loadPermissionsForSelected() async {
     if (_selectedCashier == null) return;
     final perms = await widget.permissionsService.getPermissionsForCashier(_selectedCashier!.username);
@@ -119,9 +137,16 @@ class _CashierPermissionsScreenState extends State<CashierPermissionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const AppHeader(
-        title: 'Cashier Permission Settings',
+      appBar: AppHeader(
+        title: 'Cashier Management',
         showBackButton: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync_rounded, color: AppColors.textOnDark),
+            tooltip: 'Sync Cashiers from ERP',
+            onPressed: _syncCashiers,
+          ),
+        ],
       ),
       body: SafeArea(
         child: _isLoadingUsers

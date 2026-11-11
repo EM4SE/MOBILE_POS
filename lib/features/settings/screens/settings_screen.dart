@@ -231,11 +231,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppTextField(controller: nameCtrl, label: 'Store Name'),
+              AppTextField(
+                controller: nameCtrl,
+                label: 'Store Name (Use Enter or \\n for sub-header)',
+                hintText: 'e.g. SUPER MART\nCITY BRANCH',
+                maxLines: 2,
+              ),
               const SizedBox(height: AppDimensions.md),
-              AppTextField(controller: addrCtrl, label: 'Store Address'),
+              AppTextField(
+                controller: addrCtrl,
+                label: 'Store Address',
+                hintText: 'e.g. No. 12, Main Street, Colombo',
+                maxLines: 2,
+              ),
               const SizedBox(height: AppDimensions.md),
-              AppTextField(controller: phoneCtrl, label: 'Store Phone'),
+              AppTextField(
+                controller: phoneCtrl,
+                label: 'Store Phone',
+                hintText: 'e.g. +94 11 234 5678',
+                keyboardType: TextInputType.phone,
+              ),
               const SizedBox(height: AppDimensions.md),
               AppTextField(controller: currCtrl, label: 'Currency Symbol (e.g. Rs. / \$)'),
             ],
@@ -253,8 +268,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             variant: AppButtonVariant.primary,
             width: 130,
             onPressed: () async {
-              await widget.controller.updateSettings({
+              final success = await widget.controller.updateSettings({
                 'store_name': nameCtrl.text,
+                'app_name': nameCtrl.text,
                 'store_address': addrCtrl.text,
                 'store_phone': phoneCtrl.text,
                 'currency_symbol': currCtrl.text,
@@ -263,7 +279,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.of(ctx).pop();
               }
               if (mounted) {
-                AppDialog.showSnackBar(context, 'Store settings updated successfully');
+                if (success) {
+                  AppDialog.showSnackBar(context, 'Application settings updated successfully');
+                } else {
+                  AppDialog.showSnackBar(
+                    context,
+                    widget.controller.errorMessage ?? 'Failed to update application settings',
+                    isError: true,
+                  );
+                }
               }
             },
           ),
@@ -835,6 +859,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showPosPreferencesDialog() {
     final taxCtrl = TextEditingController(text: widget.controller.taxRate);
     final prefixCtrl = TextEditingController(text: widget.controller.invoicePrefix);
+    final nextShiftCtrl = TextEditingController(text: widget.controller.nextShiftNumber);
 
     showDialog(
       context: context,
@@ -855,6 +880,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: 'Invoice Number Prefix',
                 hintText: 'INV-',
               ),
+              const SizedBox(height: AppDimensions.md),
+              AppTextField(
+                controller: nextShiftCtrl,
+                label: 'Starting / Next Shift ID Number',
+                hintText: 'e.g. 1 or 100',
+                keyboardType: TextInputType.number,
+              ),
             ],
           ),
         ),
@@ -870,9 +902,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             variant: AppButtonVariant.primary,
             width: 100,
             onPressed: () async {
+              final nextShiftVal = int.tryParse(nextShiftCtrl.text.trim()) ?? 1;
               await widget.controller.updateSettings({
                 'tax_rate': taxCtrl.text,
                 'invoice_prefix': prefixCtrl.text,
+                'next_shift_number': '$nextShiftVal',
               });
               if (ctx.mounted) {
                 Navigator.of(ctx).pop();
@@ -978,11 +1012,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _showApiSettingsDialog,
                   ),
 
-                  if (widget.authService.currentUser.value?.isAdmin == true) ...[
+                  if (widget.authService.currentUser.value == null || widget.authService.currentUser.value?.isAdmin == true) ...[
                     const SizedBox(height: AppDimensions.sm),
                     SettingsTile(
-                      title: 'Cashier Permission Settings',
-                      description: 'Manage More menu feature permissions for cashiers',
+                      title: 'Cashier Management & Permissions',
+                      description: 'Configure and manage feature access permissions for cashiers',
                       icon: Icons.admin_panel_settings_outlined,
                       iconColor: const Color(0xFFD97706),
                       onTap: () => Navigator.of(context).pushNamed(AppRoutes.cashierPermissions),

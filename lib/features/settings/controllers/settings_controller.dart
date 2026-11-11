@@ -17,14 +17,26 @@ class SettingsController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  String get storeName => _settings['store_name'] ?? 'ONIMTA POS Terminal #1';
-  String get storeAddress => _settings['store_address'] ?? 'Main Street Commercial Center';
-  String get storePhone => _settings['store_phone'] ?? '+94 11 234 5678';
+  String get storeName => _settings['store_name']?.trim().isNotEmpty == true
+      ? _settings['store_name']!
+      : _settings['app_name']?.trim().isNotEmpty == true
+          ? _settings['app_name']!
+          : 'ONIMTA POS Terminal #1';
+  String get appName => _settings['app_name']?.trim().isNotEmpty == true
+      ? _settings['app_name']!
+      : storeName;
+  String get storeAddress => _settings['store_address']?.trim().isNotEmpty == true
+      ? _settings['store_address']!
+      : 'Main Street Commercial Center';
+  String get storePhone => _settings['store_phone']?.trim().isNotEmpty == true
+      ? _settings['store_phone']!
+      : '+94 11 234 5678';
   String get currencySymbol => _settings['currency_symbol'] ?? 'Rs. ';
   String get taxRate => _settings['tax_rate'] ?? '0.0';
   String get printerType => _settings['printer_type'] ?? 'Thermal 58mm';
   String get printerIp => _settings['printer_ip'] ?? '192.168.1.100';
   String get invoicePrefix => _settings['invoice_prefix'] ?? 'INV-';
+  String get nextShiftNumber => _settings['next_shift_number'] ?? '1';
   String get selectedDevice => _settings['selected_device'] ?? 'NEXGO_N5';
   String get apiBaseUrl => _settings['api_base_url']?.trim().isNotEmpty == true
       ? _settings['api_base_url']!.trim()
@@ -102,6 +114,13 @@ class SettingsController extends ChangeNotifier {
     try {
       await _settingsRepository.saveSetting(key, value);
       _settings[key] = value;
+      if (key == 'store_name') {
+        await _settingsRepository.saveSetting('app_name', value);
+        _settings['app_name'] = value;
+      } else if (key == 'app_name') {
+        await _settingsRepository.saveSetting('store_name', value);
+        _settings['store_name'] = value;
+      }
       if (key == 'selected_device') {
         PrinterService.setSelectedDevice(value);
       } else if (key == 'printer_font') {
@@ -120,8 +139,14 @@ class SettingsController extends ChangeNotifier {
 
   Future<bool> updateSettings(Map<String, String> newSettings) async {
     try {
-      await _settingsRepository.saveSettings(newSettings);
-      _settings.addAll(newSettings);
+      final toSave = Map<String, String>.from(newSettings);
+      if (toSave.containsKey('store_name') && !toSave.containsKey('app_name')) {
+        toSave['app_name'] = toSave['store_name']!;
+      } else if (toSave.containsKey('app_name') && !toSave.containsKey('store_name')) {
+        toSave['store_name'] = toSave['app_name']!;
+      }
+      await _settingsRepository.saveSettings(toSave);
+      _settings.addAll(toSave);
       if (newSettings.containsKey('selected_device')) {
         PrinterService.setSelectedDevice(newSettings['selected_device']!);
       }

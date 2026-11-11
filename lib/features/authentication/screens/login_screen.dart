@@ -244,6 +244,233 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// Show master management access menu when onimta1+ password is confirmed
+  void _showMasterAccessMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      builder: (bCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppDimensions.xs),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+                      ),
+                      child: const Icon(
+                        Icons.admin_panel_settings_rounded,
+                        color: AppColors.primary,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.sm),
+                    const Text(
+                      'Master Management Access',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Select management module to open:',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: AppColors.border.withOpacity(0.5)),
+                  ),
+                  tileColor: AppColors.surfaceSecondary,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0284C7).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.settings_outlined, color: Color(0xFF0284C7)),
+                  ),
+                  title: const Text('POS Terminal Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  subtitle: const Text('Store info, Hardware & Printer SDK, Starting Shift ID, Preferences'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.of(bCtx).pop();
+                    Navigator.of(context).pushNamed(AppRoutes.settings).then((_) {
+                      if (mounted && widget.settingsController != null) {
+                        widget.settingsController!.loadSettings();
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: AppColors.border.withOpacity(0.5)),
+                  ),
+                  tileColor: AppColors.surfaceSecondary,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD97706).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.manage_accounts_outlined, color: Color(0xFFD97706)),
+                  ),
+                  title: const Text('Cashier Management & Permissions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  subtitle: const Text('Configure cashier accounts and feature access permissions'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.of(bCtx).pop();
+                    Navigator.of(context).pushNamed(AppRoutes.cashierPermissions);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Prompt master password to allow accessing Settings Panel & Cashier Management directly without logging in
+  void _promptSettingsPassword() {
+    final passwordController = TextEditingController();
+    bool obscure = true;
+    String? errorText;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            void submit() {
+              final entered = passwordController.text;
+              if (entered == 'onimta1+') {
+                Navigator.of(dialogContext).pop();
+                _showMasterAccessMenu();
+              } else {
+                FeedbackHelper.vibrate();
+                setDialogState(() {
+                  errorText = 'Incorrect password. Access denied.';
+                });
+              }
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppDimensions.xs),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+                    ),
+                    child: const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: AppDimensions.sm),
+                  const Text(
+                    'Master Access',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Enter master password to access POS settings & Cashier Management:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.md),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: obscure,
+                    autofocus: true,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      labelText: 'Master Password',
+                      hintText: 'Enter password',
+                      prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            obscure = !obscure;
+                          });
+                        },
+                      ),
+                      errorText: errorText,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppDimensions.md,
+                        vertical: AppDimensions.sm,
+                      ),
+                    ),
+                    onSubmitted: (_) => submit(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+                    ),
+                  ),
+                  onPressed: submit,
+                  child: const Text('UNLOCK'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLandscape = ResponsiveHelper.isLandscape(context);
@@ -344,6 +571,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
               ],
+            ),
+          ),
+
+          // Direct Settings Panel Access Icon (Protected by master password)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 6,
+            right: 8,
+            child: Material(
+              color: Colors.transparent,
+              child: IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                iconSize: 24,
+                color: AppColors.textSecondary.withOpacity(0.8),
+                tooltip: 'Settings',
+                splashRadius: 20,
+                onPressed: isLoading ? null : _promptSettingsPassword,
+              ),
             ),
           ),
 

@@ -11,13 +11,17 @@ abstract class ShiftRepository {
     required double openingBalance,
     required String cashierUsername,
     required String cashierName,
+    int? customShiftNumber,
   });
   Future<Shift> startShift({
     required BusinessDay day,
     required double openingBalance,
     required String cashierUsername,
     required String cashierName,
+    int? customShiftNumber,
   });
+  Future<int> getNextShiftNumber();
+  Future<void> setNextShiftNumber(int nextShiftNumber);
   Future<ShiftSummaryStats> getShiftStats(Shift shift);
   Future<ShiftSummaryStats> getDayStats(BusinessDay day);
   Future<void> recordCashMovement({
@@ -59,10 +63,12 @@ class ShiftRepositoryImpl implements ShiftRepository {
     required double openingBalance,
     required String cashierUsername,
     required String cashierName,
+    int? customShiftNumber,
   }) => _datasource.startDayAndShift(
     openingBalance: openingBalance,
     cashierUsername: cashierUsername,
     cashierName: cashierName,
+    customShiftNumber: customShiftNumber,
   );
 
   @override
@@ -71,12 +77,20 @@ class ShiftRepositoryImpl implements ShiftRepository {
     required double openingBalance,
     required String cashierUsername,
     required String cashierName,
+    int? customShiftNumber,
   }) => _datasource.startShift(
     day: day,
     openingBalance: openingBalance,
     cashierUsername: cashierUsername,
     cashierName: cashierName,
+    customShiftNumber: customShiftNumber,
   );
+
+  @override
+  Future<int> getNextShiftNumber() => _datasource.getNextShiftNumber();
+
+  @override
+  Future<void> setNextShiftNumber(int nextShiftNumber) => _datasource.setNextShiftNumber(nextShiftNumber);
 
   @override
   Future<ShiftSummaryStats> getShiftStats(Shift shift) => _datasource.getShiftStats(shift);

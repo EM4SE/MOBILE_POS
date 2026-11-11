@@ -19,11 +19,15 @@ abstract class ShiftService {
   Future<({BusinessDay day, Shift shift})> startDayAndShift({
     required double openingBalance,
     required User user,
+    int? customShiftNumber,
   });
   Future<Shift> startShift({
     required double openingBalance,
     required User user,
+    int? customShiftNumber,
   });
+  Future<int> getNextShiftNumber();
+  Future<void> setNextShiftNumber(int nextShiftNumber);
   Future<ShiftSummaryStats> getCurrentShiftStats();
   Future<void> recordCashMovement({
     required bool isPaidIn,
@@ -72,14 +76,22 @@ class ShiftServiceImpl implements ShiftService {
   }
 
   @override
+  Future<int> getNextShiftNumber() => _repository.getNextShiftNumber();
+
+  @override
+  Future<void> setNextShiftNumber(int nextShiftNumber) => _repository.setNextShiftNumber(nextShiftNumber);
+
+  @override
   Future<({BusinessDay day, Shift shift})> startDayAndShift({
     required double openingBalance,
     required User user,
+    int? customShiftNumber,
   }) async {
     final result = await _repository.startDayAndShift(
       openingBalance: openingBalance,
       cashierUsername: user.username,
       cashierName: user.displayName,
+      customShiftNumber: customShiftNumber,
     );
 
     _activeDay.value = result.day;
@@ -110,6 +122,7 @@ class ShiftServiceImpl implements ShiftService {
   Future<Shift> startShift({
     required double openingBalance,
     required User user,
+    int? customShiftNumber,
   }) async {
     final day = _activeDay.value ?? await _repository.getActiveDay();
     if (day == null) {
@@ -121,6 +134,7 @@ class ShiftServiceImpl implements ShiftService {
       openingBalance: openingBalance,
       cashierUsername: user.username,
       cashierName: user.displayName,
+      customShiftNumber: customShiftNumber,
     );
 
     _activeShift.value = shift;

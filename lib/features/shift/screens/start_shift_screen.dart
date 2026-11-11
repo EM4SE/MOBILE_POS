@@ -28,6 +28,22 @@ class StartShiftScreen extends StatefulWidget {
 class _StartShiftScreenState extends State<StartShiftScreen> {
   String _inputBuffer = '';
   bool _isLoading = false;
+  int _shiftNumber = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadShiftNumber();
+  }
+
+  Future<void> _loadShiftNumber() async {
+    try {
+      final nextNum = await widget.shiftService.getNextShiftNumber();
+      if (mounted) {
+        setState(() => _shiftNumber = nextNum);
+      }
+    } catch (_) {}
+  }
 
   double get _enteredOpeningBalance {
     if (_inputBuffer.isEmpty) return 0.0;
@@ -69,6 +85,65 @@ class _StartShiftScreenState extends State<StartShiftScreen> {
     });
   }
 
+  void _showEditShiftIdDialog() {
+    final shiftCtrl = TextEditingController(text: '$_shiftNumber');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.badge_outlined, color: Color(0xFF0F766E)),
+            SizedBox(width: 8),
+            Text('Set Starting Shift ID', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the sequential Shift ID / Number to start with for this shift session:',
+              style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: shiftCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Shift ID / Number',
+                hintText: 'e.g. 101, 500',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.tag),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F766E),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final parsed = int.tryParse(shiftCtrl.text.trim());
+              if (parsed != null && parsed > 0) {
+                setState(() => _shiftNumber = parsed);
+                widget.shiftService.setNextShiftNumber(parsed);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Save Shift ID'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleSubmit() async {
     final user = widget.authService.currentUser.value;
     if (user == null) {
@@ -87,11 +162,13 @@ class _StartShiftScreenState extends State<StartShiftScreen> {
         await widget.shiftService.startDayAndShift(
           openingBalance: _enteredOpeningBalance,
           user: user,
+          customShiftNumber: _shiftNumber,
         );
       } else {
         await widget.shiftService.startShift(
           openingBalance: _enteredOpeningBalance,
           user: user,
+          customShiftNumber: _shiftNumber,
         );
       }
 
@@ -100,8 +177,8 @@ class _StartShiftScreenState extends State<StartShiftScreen> {
           SnackBar(
             content: Text(
               widget.isDayStart
-                  ? 'Business Day & Shift 1 started with Float ${CurrencyFormatter.formatWithSymbol(_enteredOpeningBalance)}'
-                  : 'Shift started with Float ${CurrencyFormatter.formatWithSymbol(_enteredOpeningBalance)}',
+                  ? 'Business Day & Shift #$_shiftNumber started with Float ${CurrencyFormatter.formatWithSymbol(_enteredOpeningBalance)}'
+                  : 'Shift #$_shiftNumber started with Float ${CurrencyFormatter.formatWithSymbol(_enteredOpeningBalance)}',
             ),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 2),
@@ -174,6 +251,74 @@ class _StartShiftScreenState extends State<StartShiftScreen> {
                               Text(
                                 'User: ${user?.displayName ?? "Admin"}',
                                 style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // Shift ID Display & Manual Edit Bar
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border.all(color: themeColor.withOpacity(0.35), width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.badge_outlined, size: 18, color: themeColor),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'SHIFT ID:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '#$_shiftNumber',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                      color: themeColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              InkWell(
+                                onTap: _showEditShiftIdDialog,
+                                borderRadius: BorderRadius.circular(4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: themeColor.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: themeColor.withOpacity(0.4)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit, size: 13, color: themeColor),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'EDIT ID',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w900,
+                                          color: themeColor,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
                           ),
